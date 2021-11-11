@@ -1,0 +1,422 @@
+```{r}
+rm(list=ls())
+```
+
+```{r}
+library("Rsubread")
+library("tidyverse")
+library("readxl")
+library("vsn")
+library("tsne")
+library("reshape2")
+library("xlsx")
+library("DEGreport")
+library("ggpubr")
+library("knitr")
+library("gridExtra")
+library("DESeq2")
+library("ggplot2")
+library("dplyr")
+library("ggrepel")
+library("PCAtools")
+library("ggalt")
+library("cowplot")
+library("DOSE")
+```
+
+```{r}
+subread.counts <- readRDS("subreadcounts.rds")
+```
+
+```{r}
+rawtable <- read.csv("rawtable.csv")
+rcounts <- rawtable[,-1]
+rownames(rcounts) <- rawtable[,1] 
+```
+
+```{r}
+cnt <- rcounts[(rowSums(rcounts)>0),] 
+colnames(cnt) <- sub("Aligned.out.bam", "", colnames(cnt))
+colnames(cnt) <- sub("ample_21L0070", "", colnames(cnt))
+colnames(cnt) <- sub("_", "", colnames(cnt))
+dim(cnt)
+head(cnt)
+```
+
+```{r}
+human_biotype <- read.csv("/Users/GoksuAvar/Desktop/Krappmann_2/Krappmann_2/GCF_000001405.39_GRCh38.p13_feature_table.tsv", row.names = NULL, sep="\t")
+```
+
+```{r}
+coding_genes <- human_biotype %>%
+  dplyr::filter(class == "protein_coding" | class == "with_protein")
+
+#write.xlsx(coding_genes, "Coding Genes List.xlsx")#, overwrite=TRUE)
+```
+
+```{r}
+cnt <- subset(cnt, rownames(cnt) %in% coding_genes$symbol)
+```
+
+```{r}
+geneLength <- subread.counts$annotation %>%
+  dplyr::select("GeneID", "Length")
+```
+
+```{r}
+#make countdata a dataframe
+countdata <- data.frame(GeneID=rownames(cnt), cnt)
+countdata <- geneLength %>%
+  inner_join(countdata) %>%
+  mutate(Length=ifelse(Length-151+1>0,Length-151+1,1))
+
+tpm<-countdata %>%
+  pivot_longer( cols = starts_with("S"), names_to = "sample", 
+                values_to = "cnt") %>% 
+  group_by(sample) %>%
+  mutate(rpk = cnt/ (Length/1000) , libSize = sum(rpk), tpm = rpk / libSize *1e6 )
+```
+
+```{r}
+tpm <- tpm %>% mutate( minTPM= min(tpm[tpm>0]), log10TPM = log10(tpm+minTPM))
+head(tpm)
+```
+
+```{r}
+# let's remove columns with intermediate results
+tpm <- tpm %>% dplyr::select(-libSize,-rpk,-minTPM)
+
+png(file="TPM_filtered.png")
+ggplot(tpm,aes(x=sample,y=log10TPM))+ 
+  geom_boxplot()+
+  coord_flip()+ 
+  ylab(expression(log[10](TPM)))+
+  ggtitle("TPM (Filtered)")
+dev.off()
+```
+```{r}
+tpm %>% summarise(no.of.genes=sum( tpm>=1 ))
+```
+
+```{r}
+#the tibble tpm is grouped according to samples, this grouping needs to be removed
+tpm2<-tpm %>% ungroup() %>% group_by(GeneID) %>%
+dplyr::filter(sum(tpm<1) < 15)
+cnt.tib <- tpm2 %>% dplyr::select(GeneID,sample,cnt) %>% pivot_wider(names_from = sample,
+values_from = cnt )
+#DEseq wants a count matrix not a tibble
+cnt.filt<-as.matrix(cnt.tib[,-1]) 
+rownames(cnt.filt)<-cnt.tib$GeneID
+write.csv(cnt.filt, "Counts_Filtered.csv")
+```
+
+```{r}
+coldata <- read.csv("/Users/GoksuAvar/Desktop/Krappmann_2/Krappmann_2/coldata.csv")
+coldata <- as.matrix(coldata, rownames.force = NA)
+rownames(coldata) <- coldata[,2]
+coldata <- coldata[,-1]
+
+```
+
+```{r}
+all(rownames(coldata) %in% colnames(cnt.filt))
+```
+
+```{r}
+all(rownames(coldata) == colnames(cnt.filt))
+```
+
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = cnt.filt,
+                              colData = coldata,
+                              design = ~Sample_Group)
+dds
+```
+
+```{r}
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+```
+
+```{r}
+dds<- DESeq(dds)
+```
+```{r}
+resultsNames(dds)
+```
+
+```{r}
+vsd <- vst(dds, blind=FALSE)
+vsdMat <- assay(vsd)
+```
+
+```{r}
+vsdmelted <- melt(vsdMat)
+
+png("VSD.png")
+ggplot(vsdmelted, aes(x=Var2, y=value))+
+  geom_boxplot()+
+  coord_flip()+
+  ylab("Variance stabilized counts")+
+  xlab("Sample")+
+  ggtitle("VST")
+dev.off()
+```
+```{r}
+rlog <- rlog(dds)
+rlogMat <- assay(rlog)
+rlogmelted <- melt(rlogMat)
+
+png("rlog.png")
+ggplot(rlogmelted, aes(x=Var2, y=value))+
+  geom_boxplot()+
+  coord_flip()+
+  ylab("rlog transformed counts")+
+  xlab("Sample")+
+  ggtitle("rlog")
+dev.off()
+```
+```{r}
+png(file="PCA.png", height=600, width=800)
+pcaData <- plotPCA(rlog, intgroup=c("Sample_Group"), returnData=TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+ggplot(pcaData, aes(PC1, PC2, color=Sample_Group)) +
+  geom_point(size=7) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  theme(axis.title = element_text(size = 27, face = "bold"))+
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  theme(axis.title = element_text(size = 27, face = "bold"))+
+  ggtitle("PCA") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line(), plot.title = element_text(size=30, face="bold")) +
+  geom_text_repel(aes(label=name), size=4, color="black", nudge_y = 1, fontface="bold",  min.segment.length = unit(0.1, "lines"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="BJAB_C11_WT"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="T6_C11_WT"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="T6_C11_LI"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="T6_C11_LI_DMSO"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="T6_C11_LI_MLT-748"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="BJAB_C11_LI"))#, expand=0.08)+
+  coord_fixed()
+dev.off()
+```
+```{r}
+p <- pca(assay(rlog), metadata = coldata)
+
+png(file="PCA_New.png", height=1280, width=1440)
+biplot(p, 
+       colby = "Sample_Group", 
+       colkey = c('BJAB_C11_WT' = 'red', 'T6_C11_WT' = 'blue', "T6_C11_LI" = "purple", 
+                  "T6_C11_LI_DMSO" = "green", "T6_C11_LI_MLT-748" = "orange", 
+                  "BJAB_C11_LI" = "grey"), 
+       lab=NA,
+       pointSize = 6,
+       drawConnectors = FALSE,
+       showLoadings = FALSE,
+       colLegendTitle = 'Sample Group',
+       encircle = TRUE,
+       encircleFill = TRUE,
+       titleLabSize = 20,
+       axisLabSize = 40,
+       legendPosition = 'top', 
+       legendLabSize = 50, 
+       legendIconSize = 15, 
+       legendTitleSize = 0) +
+  ggtitle("PCA")+ 
+  theme(plot.title = element_text(size=60, face="bold"))+
+  geom_label_repel(aes(label=row.names(p$metadata)), size=6, color="black", nudge_y = 2, fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)
+dev.off()
+```
+```{r}
+Nfkb_genes <- cnt[grep("^NFKB", rownames(cnt)),]
+Nfkb_genes <- as.list(row.names(Nfkb_genes))
+```
+
+
+```{r}
+res_inhib_dmso <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI_MLT-748","T6_C11_LI_DMSO"), alpha = 0.1)
+summary(res_inhib_dmso)
+```
+```{r}
+inhib_dmso_list<-data.frame(gene = rownames(res_inhib_dmso), res_inhib_dmso,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+
+png(file="Volcano_inhib_dmso.png", width=1980, height=1440)
+ggplot(inhib_dmso_list, aes(x=log2FoldChange, y=(minuslogp)))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(inhib_dmso_list, minuslogp>(-log10(0.1))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(inhib_dmso_list, minuslogp>(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(inhib_dmso_list, minuslogp<(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Inhibitor vs DMSO Treated")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  #scale_x_continuous(breaks = seq(-20, 20, by = 5))+
+  #scale_y_continuous(breaks = seq(-30, 80, by = 10))+
+  xlab("Log2FoldChange")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("-log10(p-adj)")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = 1, linetype="dashed")+
+  geom_vline(xintercept = -1, linetype="dashed")+
+  geom_hline(yintercept = -log10(0.1), linetype="dashed")+
+  geom_label_repel(data=subset(inhib_dmso_list, minuslogp>1 | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", nudge_y = 0.5, fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)
+  #geom_point(aes(x=-3.5, y=40.5), color="red3", size=20)+
+  #geom_point(aes(x=-3.5, y=38), color="darkorange1", size=20)+
+  #geom_point(aes(x=-3.5, y=35.5), color="yellowgreen", size=20)+
+  #annotate("text", x=-3.3, y=40.55, label="p-adj<0.1 |LFC|>1", size=12, hjust=0)+
+  #annotate("text", x=-3.3, y=38.05, label="p-adj<0.1 |LFC|<1", size=12, hjust=0)+
+  #annotate("text", x=-3.3, y=35.55, label="p-adj>0.1 |LFC|>1", size=12, hjust=0)
+dev.off()
+```
+
+```{r}
+res_c11li_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","BJAB_C11_LI","BJAB_C11_WT"), alpha = 0.1)
+summary(res_c11li_c11wt)
+```
+
+```{r}
+c11li_c11wt_list<-data.frame(gene = rownames(res_c11li_c11wt), res_c11li_c11wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+
+png(file="Volcano_c11li_c11wt.png", width=1980, height=1440)
+ggplot(c11li_c11wt_list, aes(x=log2FoldChange, y=(minuslogp)))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c11li_c11wt_list, minuslogp>(-log10(0.1))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(c11li_c11wt_list, minuslogp>(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(c11li_c11wt_list, minuslogp<(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("CARD11 Mutant vs WT")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  #scale_x_continuous(breaks = seq(-20, 20, by = 5))+
+  #scale_y_continuous(breaks = seq(-30, 80, by = 10))+
+  xlab("Log2FoldChange")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("-log10(p-adj)")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = 1, linetype="dashed")+
+  geom_vline(xintercept = -1, linetype="dashed")+
+  geom_hline(yintercept = -log10(0.1), linetype="dashed")+
+  geom_label_repel(data=subset(c11li_c11wt_list, minuslogp>1 | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", nudge_y = 0.5, fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)
+  #geom_point(aes(x=-3.5, y=40.5), color="red3", size=20)+
+  #geom_point(aes(x=-3.5, y=38), color="darkorange1", size=20)+
+  #geom_point(aes(x=-3.5, y=35.5), color="yellowgreen", size=20)+
+  #annotate("text", x=-3.3, y=40.55, label="p-adj<0.1 |LFC|>1", size=12, hjust=0)+
+  #annotate("text", x=-3.3, y=38.05, label="p-adj<0.1 |LFC|<1", size=12, hjust=0)+
+  #annotate("text", x=-3.3, y=35.55, label="p-adj>0.1 |LFC|>1", size=12, hjust=0)
+dev.off()
+```
+
+```{r}
+res_t6li_t6wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","T6_C11_WT"), alpha = 0.1)
+summary(res_t6li_t6wt)
+```
+
+```{r}
+t6li_t6wt_list<-data.frame(gene = rownames(res_t6li_t6wt), res_t6li_t6wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+
+png(file="Volcano_t6li_t6wt.png", width=1980, height=1440)
+ggplot(t6li_t6wt_list, aes(x=log2FoldChange, y=(minuslogp)))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(t6li_t6wt_list, minuslogp>(-log10(0.1))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(t6li_t6wt_list, minuslogp>(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(t6li_t6wt_list, minuslogp<(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("CARD11 Mutant vs WT (TRAF6 KO)")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  #scale_x_continuous(breaks = seq(-20, 20, by = 5))+
+  #scale_y_continuous(breaks = seq(-30, 80, by = 10))+
+  xlab("Log2FoldChange")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("-log10(p-adj)")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = 1, linetype="dashed")+
+  geom_vline(xintercept = -1, linetype="dashed")+
+  geom_hline(yintercept = -log10(0.1), linetype="dashed")+
+  geom_label_repel(data=subset(t6li_t6wt_list, minuslogp>1 | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", nudge_y = 0.5, fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)
+  #geom_point(aes(x=-3.5, y=40.5), color="red3", size=20)+
+  #geom_point(aes(x=-3.5, y=38), color="darkorange1", size=20)+
+  #geom_point(aes(x=-3.5, y=35.5), color="yellowgreen", size=20)+
+  #annotate("text", x=-3.3, y=40.55, label="p-adj<0.1 |LFC|>1", size=12, hjust=0)+
+  #annotate("text", x=-3.3, y=38.05, label="p-adj<0.1 |LFC|<1", size=12, hjust=0)+
+  #annotate("text", x=-3.3, y=35.55, label="p-adj>0.1 |LFC|>1", size=12, hjust=0)
+dev.off()
+```
+```{r}
+res_t6li_c11li <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","BJAB_C11_LI"), alpha = 0.1)
+summary(res_t6li_c11li)
+```
+```{r}
+t6li_c11li_list<-data.frame(gene = rownames(res_t6li_c11li), res_t6li_c11li,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+
+png(file="Volcano_t6li_c11li.png", width=1980, height=1440)
+ggplot(t6li_c11li_list, aes(x=log2FoldChange, y=(minuslogp)))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.1))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp<(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("CARD11 Mutant vs WT (TRAF6 KO)")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  #scale_x_continuous(breaks = seq(-20, 20, by = 5))+
+  #scale_y_continuous(breaks = seq(-30, 80, by = 10))+
+  xlab("Log2FoldChange")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("-log10(p-adj)")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = 1, linetype="dashed")+
+  geom_vline(xintercept = -1, linetype="dashed")+
+  geom_hline(yintercept = -log10(0.1), linetype="dashed")+
+  geom_label_repel(data=subset(t6li_c11li_list, minuslogp>1 | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = 8)
+  #geom_point(aes(x=-3.5, y=40.5), color="red3", size=20)+
+  #geom_point(aes(x=-3.5, y=38), color="darkorange1", size=20)+
+  #geom_point(aes(x=-3.5, y=35.5), color="yellowgreen", size=20)+
+  #annotate("text", x=-3.3, y=40.55, label="p-adj<0.1 |LFC|>1", size=12, hjust=0)+
+  #annotate("text", x=-3.3, y=38.05, label="p-adj<0.1 |LFC|<1", size=12, hjust=0)+
+  #annotate("text", x=-3.3, y=35.55, label="p-adj>0.1 |LFC|>1", size=12, hjust=0)
+dev.off()
+```
+
+```{r}
+t6li_c11li_list<-data.frame(gene = rownames(res_t6li_c11li), res_t6li_c11li,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+
+png(file="Volcano_t6li_c11li_nfkb.png", width=1980, height=1440)
+ggplot(t6li_c11li_list, aes(x=log2FoldChange, y=(minuslogp)))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.1))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp<(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("CARD11 Mutant vs WT (TRAF6 KO)")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  #scale_x_continuous(breaks = seq(-20, 20, by = 5))+
+  #scale_y_continuous(breaks = seq(-30, 80, by = 10))+
+  xlab("Log2FoldChange")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("-log10(p-adj)")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = 1, linetype="dashed")+
+  geom_vline(xintercept = -1, linetype="dashed")+
+  geom_hline(yintercept = -log10(0.1), linetype="dashed")+
+  geom_label_repel(data=subset(t6li_c11li_list, gene %in% Nfkb_genes), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = 8)
+  #geom_point(aes(x=-3.5, y=40.5), color="red3", size=20)+
+  #geom_point(aes(x=-3.5, y=38), color="darkorange1", size=20)+
+  #geom_point(aes(x=-3.5, y=35.5), color="yellowgreen", size=20)+
+  #annotate("text", x=-3.3, y=40.55, label="p-adj<0.1 |LFC|>1", size=12, hjust=0)+
+  #annotate("text", x=-3.3, y=38.05, label="p-adj<0.1 |LFC|<1", size=12, hjust=0)+
+  #annotate("text", x=-3.3, y=35.55, label="p-adj>0.1 |LFC|>1", size=12, hjust=0)
+dev.off()
+```
+
+
+
+
+
+
