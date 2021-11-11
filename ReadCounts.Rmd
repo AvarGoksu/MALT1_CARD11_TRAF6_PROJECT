@@ -1,0 +1,27 @@
+```{r}
+library("Rsubread")
+```
+
+```{r}
+list_of_bam<-list.files(path = "/Volumes/ToshibaExt/Krappmann_2/Results_Krappmann_2/BamFiles", pattern = ".bam$", full.names = T)
+```
+
+```{r}
+subread.counts<-featureCounts(files=list_of_bam, annot.ext="/Volumes/ToshibaExt/Krappmann_2/GCF_000001405.39_GRCh38.p13_genomic.gtf",
+isGTFAnnotationFile = TRUE, GTF.featureType="exon", GTF.attrType="gene_id", useMetaFeatures = TRUE, allowMultiOverlap = FALSE, isPairedEnd = TRUE, requireBothEndsMapped=T)
+```
+
+```{r}
+saveRDS(subread.counts, file = "subreadcounts.rds")
+```
+
+```{r}
+rcounts<-subread.counts$counts
+head(rcounts)
+dim(rcounts)
+```
+
+```{r}
+write.csv(rcounts, "rawtable.csv")
+```
+
