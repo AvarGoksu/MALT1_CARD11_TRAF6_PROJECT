@@ -1,0 +1,43 @@
+```{r}
+rm(list=ls())
+```
+
+
+```{r}
+library("dplyr")
+library("stringr")
+```
+
+
+```{r}
+coldata <- read.csv("/Users/GoksuAvar/Desktop/Krappmann_2/Krappmann_2/Project_107_lims.csv")
+```
+
+```{r}
+coldata <- coldata %>%
+  dplyr::select(Sample_ID, Sample_NameLIMS) %>%
+  dplyr::rename("Sample_Group" = "Sample_NameLIMS") 
+```
+
+```{r}
+for(i in 1:nrow(coldata)){
+  coldata$Sample_ID[i] <- paste0("S", str_sub(coldata$Sample_ID[i], -2, -1))
+  coldata$Sample_Group[i] <- str_sub(coldata$Sample_Group[i], 1, nchar(coldata$Sample_Group[i])-2)}
+```
+
+```{r}
+coldata <- subset(coldata, coldata$Sample_ID != "S74")
+```
+
+```{r}
+coldata <- coldata %>%
+  mutate(Experiment = ifelse(coldata$Sample_Group == "T6_C11_LI_DMSO" | coldata$Sample_Group == "T6_C11_LI_MLT-748", "Exp2", "Exp1"))
+```
+
+
+```{r}
+write.csv(coldata, "coldata.csv")
+```
+
+
+
