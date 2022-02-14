@@ -3,26 +3,47 @@ rm(list=ls())
 ```
 
 ```{r}
-library("Rsubread")
-library("tidyverse")
-library("readxl")
-library("vsn")
-library("tsne")
-library("reshape2")
-library("xlsx")
-library("DEGreport")
-library("ggpubr")
-library("knitr")
-library("gridExtra")
-library("DESeq2")
-library("ggplot2")
-library("dplyr")
-library("ggrepel")
-library("PCAtools")
-library("ggalt")
-library("cowplot")
-library("DOSE")
+library(Rsubread)
+library(readxl)
+library(vsn)
+library(tsne)
+library(reshape2)
+library(xlsx)
+library(ggpubr)
+library(knitr)
+library(gridExtra)
+library(DESeq2)
+library(ggplot2)
+library(dplyr)
+library(ggrepel)
+library(PCAtools)
+library(ggalt)
+library(cowplot)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+library(ReactomePA)
+library(ReactomeContentService4R)
+library(tidyverse)
+library(enrichplot)
+library(DOSE)
+library(pheatmap)
 ```
+
+To add:
+gseaplot2(y_inhib_dmso, geneSetID = 1:3, pvalue_table = TRUE,
+          color = c("#E495A5", "#86B875", "#7DB0DD"))
+
+enrichplot::upsetplot(y_inhib_dmso)
+
+enrichplot::heatplot(y_inhib_dmso, showCategory = 15)
+
+y_inhib_dmso <- setReadable(y_inhib_dmso, 'org.Hs.eg.db', 'ENTREZID')
+
+enrichplot::cnetplot(y_inhib_dmso_wnames)
+
+dotplot(y_inhib_dmso)
+
+
 
 ```{r}
 subread.counts <- readRDS("subreadcounts.rds")
@@ -100,8 +121,11 @@ tpm %>% summarise(no.of.genes=sum( tpm>=1 ))
 
 ```{r}
 #the tibble tpm is grouped according to samples, this grouping needs to be removed
-tpm2<-tpm %>% ungroup() %>% group_by(GeneID) %>%
-dplyr::filter(sum(tpm<1) < 15)
+tpm2<-tpm %>% 
+  ungroup() %>% 
+  group_by(GeneID) %>%
+  dplyr::filter(sum(tpm<1) < 15)
+
 cnt.tib <- tpm2 %>% dplyr::select(GeneID,sample,cnt) %>% pivot_wider(names_from = sample,
 values_from = cnt )
 #DEseq wants a count matrix not a tibble
@@ -117,6 +141,13 @@ rownames(coldata) <- coldata[,2]
 coldata <- coldata[,-1]
 
 ```
+
+```{r}
+#cnt <- cnt %>% dplyr::select(-c(S59))
+#cnt.filt <- cnt.filt[,-c(12)]
+#coldata <- coldata[-c(12),]
+```
+
 
 ```{r}
 all(rownames(coldata) %in% colnames(cnt.filt))
@@ -178,7 +209,7 @@ ggplot(rlogmelted, aes(x=Var2, y=value))+
 dev.off()
 ```
 ```{r}
-png(file="PCA.png", height=600, width=800)
+png(file="PCA_rlog.png", height=600, width=800)
 pcaData <- plotPCA(rlog, intgroup=c("Sample_Group"), returnData=TRUE)
 percentVar <- round(100 * attr(pcaData, "percentVar"))
 ggplot(pcaData, aes(PC1, PC2, color=Sample_Group)) +
@@ -191,6 +222,8 @@ ggplot(pcaData, aes(PC1, PC2, color=Sample_Group)) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line(), plot.title = element_text(size=30, face="bold")) +
   geom_text_repel(aes(label=name), size=4, color="black", nudge_y = 1, fontface="bold",  min.segment.length = unit(0.1, "lines"))+
+  scale_color_manual(values=c("deeppink3", "yellowgreen", "red3", "darkorange1",
+                             "royalblue3", "darkslategray"))+
   geom_encircle(data=subset(pcaData, Sample_Group=="BJAB_C11_WT"))+
   geom_encircle(data=subset(pcaData, Sample_Group=="T6_C11_WT"))+
   geom_encircle(data=subset(pcaData, Sample_Group=="T6_C11_LI"))+
@@ -200,6 +233,32 @@ ggplot(pcaData, aes(PC1, PC2, color=Sample_Group)) +
   coord_fixed()
 dev.off()
 ```
+```{r}
+png(file="PCA_vst.png", height=600, width=800)
+pcaData <- plotPCA(vsd, intgroup=c("Sample_Group"), returnData=TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+ggplot(pcaData, aes(PC1, PC2, color=Sample_Group)) +
+  geom_point(size=7) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  theme(axis.title = element_text(size = 27, face = "bold"))+
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  theme(axis.title = element_text(size = 27, face = "bold"))+
+  ggtitle("PCA") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line(), plot.title = element_text(size=30, face="bold")) +
+  geom_text_repel(aes(label=name), size=4, color="black", nudge_y = 1, fontface="bold",  min.segment.length = unit(0.1, "lines"))+
+  scale_color_manual(values=c("deeppink3", "yellowgreen", "red3", "darkorange1",
+                             "royalblue3", "darkslategray"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="BJAB_C11_WT"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="T6_C11_WT"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="T6_C11_LI"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="T6_C11_LI_DMSO"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="T6_C11_LI_MLT-748"))+
+  geom_encircle(data=subset(pcaData, Sample_Group=="BJAB_C11_LI"))#, expand=0.08)+
+  coord_fixed()
+dev.off()
+```
+
 ```{r}
 p <- pca(assay(rlog), metadata = coldata)
 
@@ -230,48 +289,231 @@ dev.off()
 ```{r}
 Nfkb_genes <- cnt[grep("^NFKB", rownames(cnt)),]
 Nfkb_genes <- as.list(row.names(Nfkb_genes))
+
+Zc3H12_genes <- cnt[grep("^ZC3H12", rownames(cnt)),]
+Zc3H12_genes <- as.list(row.names(Zc3H12_genes))
+
 ```
 
 
 ```{r}
-res_inhib_dmso <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI_MLT-748","T6_C11_LI_DMSO"), alpha = 0.1)
+res_inhib_dmso <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI_MLT-748","T6_C11_LI_DMSO"), alpha = 0.05)
 summary(res_inhib_dmso)
 ```
 ```{r}
 inhib_dmso_list<-data.frame(gene = rownames(res_inhib_dmso), res_inhib_dmso,
 stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
 
-png(file="Volcano_inhib_dmso.png", width=1980, height=1440)
+inhib_dmso_sorted <- inhib_dmso_list %>% 
+  arrange(desc(abs(LFCminuslogp)))
+
+write.xlsx(inhib_dmso_sorted, "inhib_dmso_sorted.xlsx")
+
+pdf(file="Volcano_inhib_dmso.pdf", width=24, height=21)
 ggplot(inhib_dmso_list, aes(x=log2FoldChange, y=(minuslogp)))+
   geom_point(size=2.25,color="grey", alpha=0.5)+
-  geom_point(data=subset(inhib_dmso_list, minuslogp>(-log10(0.1))), size=2.25,color="darkorange1", alpha=1)+
-  geom_point(data=subset(inhib_dmso_list, minuslogp>(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
-  geom_point(data=subset(inhib_dmso_list, minuslogp<(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  geom_point(data=subset(inhib_dmso_list, minuslogp>(-log10(0.05))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(inhib_dmso_list, minuslogp>(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(inhib_dmso_list, minuslogp<(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
   ggtitle("Inhibitor vs DMSO Treated")+
   theme(plot.title = element_text(size = 60, face = "bold"))+
-  #scale_x_continuous(breaks = seq(-20, 20, by = 5))+
-  #scale_y_continuous(breaks = seq(-30, 80, by = 10))+
   xlab("Log2FoldChange")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
   ylab("-log10(p-adj)")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
   geom_vline(xintercept = 1, linetype="dashed")+
   geom_vline(xintercept = -1, linetype="dashed")+
-  geom_hline(yintercept = -log10(0.1), linetype="dashed")+
-  geom_label_repel(data=subset(inhib_dmso_list, minuslogp>1 | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", nudge_y = 0.5, fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)
-  #geom_point(aes(x=-3.5, y=40.5), color="red3", size=20)+
-  #geom_point(aes(x=-3.5, y=38), color="darkorange1", size=20)+
-  #geom_point(aes(x=-3.5, y=35.5), color="yellowgreen", size=20)+
-  #annotate("text", x=-3.3, y=40.55, label="p-adj<0.1 |LFC|>1", size=12, hjust=0)+
-  #annotate("text", x=-3.3, y=38.05, label="p-adj<0.1 |LFC|<1", size=12, hjust=0)+
-  #annotate("text", x=-3.3, y=35.55, label="p-adj>0.1 |LFC|>1", size=12, hjust=0)
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(inhib_dmso_list, minuslogp>(-log10(0.05)) | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", nudge_y = 0.5, fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)
 dev.off()
 ```
 
 ```{r}
-res_c11li_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","BJAB_C11_LI","BJAB_C11_WT"), alpha = 0.1)
+inhib_dmso_list<-data.frame(gene = rownames(res_inhib_dmso), res_inhib_dmso,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+
+pdf(file="Volcano_inhib_dmso_nfkb.pdf", width=24, height=21)
+ggplot(inhib_dmso_list, aes(x=log2FoldChange, y=(minuslogp)))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(inhib_dmso_list, minuslogp>(-log10(0.05))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(inhib_dmso_list, minuslogp>(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(inhib_dmso_list, minuslogp<(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Inhibitor vs DMSO Treated")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  xlab("Log2FoldChange")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("-log10(p-adj)")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = 1, linetype="dashed")+
+  geom_vline(xintercept = -1, linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(inhib_dmso_list, gene %in% c(Nfkb_genes, Zc3H12_genes)), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = Inf)
+dev.off()
+```
+
+```{r}
+res_inhib_dmso<-data.frame(rn=rownames(res_inhib_dmso),res_inhib_dmso) %>% na.omit()
+#make a named vector of P adjusted
+inhib_dmso_gsea <- res_inhib_dmso$padj 
+names(inhib_dmso_gsea) <- res_inhib_dmso$rn
+
+
+ensgEntrez_inhib_dmso_gsea <- AnnotationDbi::select(org.Hs.eg.db, keys=names(inhib_dmso_gsea), columns='ENTREZID', keytype='SYMBOL')
+
+df_inhib_dmso_gsea <- ensgEntrez_inhib_dmso_gsea %>%
+  dplyr::inner_join(res_inhib_dmso, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj))
+
+inhib_dmso_lfc<-df_inhib_dmso_gsea$lfc 
+names(inhib_dmso_lfc)<-df_inhib_dmso_gsea$ENTREZID
+
+y_inhib_dmso <- gsePathway(sort((inhib_dmso_lfc), decreasing=T), organism = "human", pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F, eps=0)
+
+y_inhib_dmso <- setReadable(y_inhib_dmso, 'org.Hs.eg.db', 'ENTREZID')
+
+inhib_dmso_gsea <- y_inhib_dmso@result
+inhib_dmso_gsea <- inhib_dmso_gsea %>% arrange(desc(NES))
+
+pathway_list_inhib_dmso <- c("TNFs bind their physiological receptors",
+                             "TNFR2 non-canonical NF-kB pathway",
+                             "TNF receptor superfamily (TNFSF) members mediating non-canonical NF-kB pathway")
+
+geneSetID_inhib_dmso = match(pathway_list_inhib_dmso,
+                              y_inhib_dmso@result[["Description"]])
+
+pdf("gseaplot2_inhib_dmso.pdf", width=12, height=10)
+gseaplot2(y_inhib_dmso, geneSetID = geneSetID_inhib_dmso[!is.na(geneSetID_inhib_dmso)], 
+          pvalue_table = FALSE, 
+          title="Inhibitor vs DMSO Treatment Selected Pathways", 
+          base_size = 18,
+          rel_heights = c(2.5,0.3,0.5))+
+  theme(axis.text = element_text(size=12, face = "bold"),
+        axis.title = element_text(size=16))
+dev.off()
+
+
+edo2_inhib_dmso <- gseDO(sort((inhib_dmso_lfc), decreasing=T))
+
+
+pdf("heatplot_inhib_dmso.pdf", width = 12, height=3)
+enrichplot::heatplot(y_inhib_dmso, 
+                     showCategory = pathway_list_inhib_dmso, 
+                     foldChange = inhib_dmso_lfc)+
+  ggtitle("Inhibitor vs DMSO Treatment Selected Pathways")+
+  theme(axis.text.y=element_text(size=12, face = "bold"),
+        axis.text.x=element_text(size=9, face="bold"),
+        plot.title = element_text(size = 24, face="bold"))
+dev.off()
+
+pdf("cnetplot_inhib_dmso.pdf", width = 21, height = 18)
+enrichplot::cnetplot(y_inhib_dmso,
+                     showCategory = pathway_list_inhib_dmso,
+                     foldChange = inhib_dmso_lfc, color_category='firebrick',
+                     colorEdge=TRUE, cex_category = 2, cex_gene = 1,
+                     cex_label_category = 1.5, cex_label_gene=1)+
+  ggtitle("Inhibitor vs DMSO Treatment Selected Pathways")+
+  theme(legend.text = element_text(size=12),
+        legend.title = element_text(size=12),
+        plot.title=element_text(size=24,face="bold"))
+dev.off()
+
+res_inhib_dmso_less<-DESeq2::results(dds,
+                                         contrast=c("Sample_Group",
+                                                    "T6_C11_LI_MLT-748", "T6_C11_LI_DMSO"),
+                                         alpha = 0.05, altHypothesis = "less") 
+
+res_inhib_dmso_less<-data.frame(rn=
+                                rownames(res_inhib_dmso_less),
+                                res_inhib_dmso_less) %>% na.omit()
+
+#make a named vector of P adjusted
+inhib_dmso_down <- res_inhib_dmso_less$padj 
+names(inhib_dmso_down) <- res_inhib_dmso_less$rn
+
+ensgEntrez_inhib_dmso <- AnnotationDbi::select(org.Hs.eg.db, keys=names(inhib_dmso_down), columns='ENTREZID', keytype='SYMBOL')
+
+df_inhib_dmso <-ensgEntrez_inhib_dmso %>%
+  dplyr::inner_join(res_inhib_dmso_less, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj)) %>%
+  dplyr::filter(lfc < -(0.5))
+
+df_inhib_dmso_sig_down <-ensgEntrez_inhib_dmso %>%
+  dplyr::inner_join(res_inhib_dmso_less, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj))
+
+sg<-unique(( df_inhib_dmso_sig_down %>% dplyr::filter(up<=0.1))$ENTREZID)
+x_inhib_dmso_down <- enrichPathway(gene=sg,organism = "human",
+pvalueCutoff=0.1, pAdjustMethod="BH", readable=T)
+
+geneList_inhib_dmso <- df_inhib_dmso$lfc
+names(geneList_inhib_dmso) <- df_inhib_dmso$ENTREZID
+  
+de_inhib_dmso <- names(geneList_inhib_dmso)
+
+edo_inhib_dmso <- enrichDGN(de_inhib_dmso)
+
+disease_list_inhib_dmso <- subset(edo_inhib_dmso, grepl("Lymphoma", edo_inhib_dmso@result[["Description"]]))$Description 
+
+edox_inhib_dmso <- setReadable(edo_inhib_dmso, 'org.Hs.eg.db', 'ENTREZID')
+
+pdf("barplot_lymphoma_inhib_dmso.pdf", width=12, height = 18)
+barplot(edo_inhib_dmso, showCategory=disease_list_inhib_dmso)+
+  ggtitle("Inhib vs DMSO Downregulated Lymphoma Genes")+
+  theme(plot.title = element_text(size=16, face="bold"))
+dev.off()
+
+pdf("heatplot_lymphoma_inhib_dmso.pdf", width = 12, height=5)
+heatplot(edox_inhib_dmso, showCategory = disease_list_inhib_dmso, 
+         foldChange = geneList_inhib_dmso)+
+  ggtitle("Inhib vs DMSO Downregulated Genes Associated with Lymphoma Phenotype (LFC < -0.5)")+
+  theme(axis.text.y=element_text(size=12, face = "bold"),
+        axis.text.x=element_text(size=12, face="bold"),
+        plot.title = element_text(size=12, face="bold"))
+dev.off()
+
+write.xlsx(inhib_dmso_gsea, "inhib_dmso_gsea.xlsx")
+
+```
+
+```{r}
+pdf("Reactome_inhib_dmso.pdf", width=24, height=18)
+for(i in 1:nrow(inhib_dmso_gsea)){
+  ID <- inhib_dmso_gsea$ID[i]
+  Description <- inhib_dmso_gsea$Description[i]
+  genelist <- event2Ids(ID)[["geneSymbol"]]
+  
+  print(ggplot(inhib_dmso_list, aes(x=log2FoldChange, y=(minuslogp)))+
+          geom_point(size=2.25,color="grey", alpha=0.4)+
+          geom_point(data=subset(inhib_dmso_list, inhib_dmso_list$gene %in% genelist), color="red3", alpha=1, size=5)+
+        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+          ggtitle("Inhibitor vs DMSO Treated")+
+          theme(plot.title = element_text(size = 60, face = "bold"))+
+          xlab("Log2FoldChange")+
+          theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+          ylab("-log10(p-adj)")+
+          theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+          geom_vline(xintercept = 1, linetype="dashed")+
+          geom_vline(xintercept = -1, linetype="dashed")+
+          geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+          geom_label_repel(data=subset(inhib_dmso_list, gene %in% genelist & (inhib_dmso_list$padj < 0.055 & abs(inhib_dmso_list$log2FoldChange) > 0.9)), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = Inf)+
+          annotate("text", x=-5, y=50, label=paste0(Description), size=12, hjust=0, color="red3")+
+          annotate("text", x=-5, y=45, label=paste0(ID), size=12, hjust=0, color="red3"))}
+dev.off()
+```
+
+```{r}
+res_c11li_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","BJAB_C11_LI","BJAB_C11_WT"), alpha = 0.05)
 summary(res_c11li_c11wt)
 ```
 
@@ -279,37 +521,249 @@ summary(res_c11li_c11wt)
 c11li_c11wt_list<-data.frame(gene = rownames(res_c11li_c11wt), res_c11li_c11wt,
 stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
 
-png(file="Volcano_c11li_c11wt.png", width=1980, height=1440)
+c11li_c11wt_sorted <- c11li_c11wt_list %>% 
+  arrange(desc(abs(LFCminuslogp)))
+
+write.xlsx(c11li_c11wt_sorted, "c11li_c11wt_sorted.xlsx")
+
+pdf(file="Volcano_c11li_c11wt.pdf", width=24, height=21)
 ggplot(c11li_c11wt_list, aes(x=log2FoldChange, y=(minuslogp)))+
   geom_point(size=2.25,color="grey", alpha=0.5)+
-  geom_point(data=subset(c11li_c11wt_list, minuslogp>(-log10(0.1))), size=2.25,color="darkorange1", alpha=1)+
-  geom_point(data=subset(c11li_c11wt_list, minuslogp>(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
-  geom_point(data=subset(c11li_c11wt_list, minuslogp<(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  geom_point(data=subset(c11li_c11wt_list, minuslogp>(-log10(0.05))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(c11li_c11wt_list, minuslogp>(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(c11li_c11wt_list, minuslogp<(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
   ggtitle("CARD11 Mutant vs WT")+
   theme(plot.title = element_text(size = 60, face = "bold"))+
-  #scale_x_continuous(breaks = seq(-20, 20, by = 5))+
-  #scale_y_continuous(breaks = seq(-30, 80, by = 10))+
   xlab("Log2FoldChange")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
   ylab("-log10(p-adj)")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
   geom_vline(xintercept = 1, linetype="dashed")+
   geom_vline(xintercept = -1, linetype="dashed")+
-  geom_hline(yintercept = -log10(0.1), linetype="dashed")+
-  geom_label_repel(data=subset(c11li_c11wt_list, minuslogp>1 | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", nudge_y = 0.5, fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)
-  #geom_point(aes(x=-3.5, y=40.5), color="red3", size=20)+
-  #geom_point(aes(x=-3.5, y=38), color="darkorange1", size=20)+
-  #geom_point(aes(x=-3.5, y=35.5), color="yellowgreen", size=20)+
-  #annotate("text", x=-3.3, y=40.55, label="p-adj<0.1 |LFC|>1", size=12, hjust=0)+
-  #annotate("text", x=-3.3, y=38.05, label="p-adj<0.1 |LFC|<1", size=12, hjust=0)+
-  #annotate("text", x=-3.3, y=35.55, label="p-adj>0.1 |LFC|>1", size=12, hjust=0)
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c11li_c11wt_list, minuslogp>(-log10(0.05)) | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", nudge_y = 0.5, fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)
 dev.off()
 ```
 
 ```{r}
-res_t6li_t6wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","T6_C11_WT"), alpha = 0.1)
+c11li_c11wt_list<-data.frame(gene = rownames(res_c11li_c11wt), res_c11li_c11wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+
+pdf(file="Volcano_c11li_c11wt_nfkb.pdf", width=24, height=21)
+ggplot(c11li_c11wt_list, aes(x=log2FoldChange, y=(minuslogp)))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c11li_c11wt_list, minuslogp>(-log10(0.05))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(c11li_c11wt_list, minuslogp>(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(c11li_c11wt_list, minuslogp<(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("CARD11 Mutant vs WT")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  xlab("Log2FoldChange")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("-log10(p-adj)")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = 1, linetype="dashed")+
+  geom_vline(xintercept = -1, linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c11li_c11wt_list, gene %in% c(Nfkb_genes, Zc3H12_genes)), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = Inf)
+dev.off()
+```
+
+```{r}
+res_c11li_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","BJAB_C11_LI","BJAB_C11_WT"), alpha = 0.05)
+
+res_c11li_c11wt<-data.frame(rn=rownames(res_c11li_c11wt),res_c11li_c11wt) %>% na.omit()
+#make a named vector of P adjusted
+c11li_c11wt_gsea <- res_c11li_c11wt$padj 
+names(c11li_c11wt_gsea) <- res_c11li_c11wt$rn
+
+
+ensgEntrez_c11li_c11wt_gsea <- AnnotationDbi::select(org.Hs.eg.db, keys=names(c11li_c11wt_gsea), columns='ENTREZID', keytype='SYMBOL')
+
+df_c11li_c11wt_gsea <- ensgEntrez_c11li_c11wt_gsea %>%
+  dplyr::inner_join(res_c11li_c11wt, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj)) 
+
+c11li_c11wt_lfc<-df_c11li_c11wt_gsea$lfc 
+names(c11li_c11wt_lfc)<-df_c11li_c11wt_gsea$ENTREZID
+
+y_c11li_c11wt <- gsePathway(sort((c11li_c11wt_lfc), decreasing=T), organism = "human", pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F, eps=0)
+
+y_c11li_c11wt <- setReadable(y_c11li_c11wt, 'org.Hs.eg.db', 'ENTREZID')
+
+c11li_c11wt_gsea <- y_c11li_c11wt@result
+c11li_c11wt_gsea <- c11li_c11wt_gsea %>% arrange(desc(NES))
+
+
+#"Interferon gamma signaling" "Interleukin-10 signaling" "Interleukin-4 and Interleukin-13 signaling" "Costimulation by the CD28 family" "TNFR2 non-canonical NF-kB pathway" "CD28 co-stimulation" "CD28 dependent PI3K/Akt signaling" "Interleukin-2 signaling"  "Dectin-1 mediated noncanonical NF-kB signaling" "Activation of NF-kappaB in B cells" 
+pathway_list_c11li_c11wt <- c("Interferon gamma signaling", 
+                              "Interleukin-10 signaling",
+                              "Interleukin-4 and Interleukin-13 signaling",
+                              "Costimulation by the CD28 family",
+                              "TNFR2 non-canonical NF-kB pathway",
+                              "Chemokine receptors bind chemokines",
+                              "Inflammasomes",
+                              "Signaling by Interleukins")
+
+geneSetID_c11li_c11wt = match(pathway_list_c11li_c11wt,
+                              y_c11li_c11wt@result[["Description"]])
+
+pdf("gseaplot2_c11li_c11wt.pdf", width=12, height=9)
+gseaplot2(y_c11li_c11wt, geneSetID = geneSetID_c11li_c11wt[!is.na(geneSetID_c11li_c11wt)],
+          pvalue_table = FALSE, 
+          title="C11MT vs C11WT Selected Pathways", 
+          base_size = 18,
+          rel_heights = c(2,0.3,0.5))+
+  theme(axis.text = element_text(size=12, face = "bold"),
+        axis.title = element_text(size=16))
+dev.off()
+
+
+    
+edo2_c11li_c11wt <- gseDO(sort((c11li_c11wt_lfc), decreasing=T))
+
+
+res_c11li_c11wt_greater<-DESeq2::results(dds,
+                                         contrast=c("Sample_Group",
+                                                    "BJAB_C11_LI", "BJAB_C11_WT"),
+                                         alpha = 0.05, altHypothesis = "greater") 
+
+res_c11li_c11wt_greater<-data.frame(rn=
+                                rownames(res_c11li_c11wt_greater),
+                                res_c11li_c11wt_greater) %>% na.omit()
+
+#make a named vector of P adjusted
+c11li_c11wt_up <- res_c11li_c11wt_greater$padj 
+names(c11li_c11wt_up) <- res_c11li_c11wt_greater$rn
+
+ensgEntrez_c11li_c11wt <- AnnotationDbi::select(org.Hs.eg.db, keys=names(c11li_c11wt_up), columns='ENTREZID', keytype='SYMBOL')
+
+df_c11li_c11wt <-ensgEntrez_c11li_c11wt %>%
+  dplyr::inner_join(res_c11li_c11wt_greater, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj)) %>%
+  dplyr::filter(lfc > 1)
+
+df_c11li_c11wt_sig_up <-ensgEntrez_c11li_c11wt %>%
+  dplyr::inner_join(res_c11li_c11wt_greater, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj))
+
+sg<-unique(( df_c11li_c11wt_sig_up %>% dplyr::filter(up<=0.05))$ENTREZID)
+x_c11li_c11wt_up <- enrichPathway(gene=sg,organism = "human",
+pvalueCutoff=0.1, pAdjustMethod="BH", readable=T)
+
+pdf("heatplot_c11li_c11wt.pdf", width = 11, height=5)
+enrichplot::heatplot(x_c11li_c11wt_up, 
+                     showCategory = pathway_list_c11li_c11wt, 
+                     foldChange = c11li_c11wt_lfc)+
+  ggtitle("C11MT vs C11WT Selected Pathways (Genes with padj<0.05 are displayed)")+
+  theme(axis.text.y=element_text(size=12, face = "bold"),
+        axis.text.x=element_text(size=9, face="bold"),
+        plot.title = element_text(size = 16, face="bold"))
+dev.off()
+
+pdf("cnetplot_c11li_c11wt.pdf", width = 16, height = 10)
+enrichplot::cnetplot(x_c11li_c11wt_up,
+                     showCategory = pathway_list_c11li_c11wt,
+                     foldChange = c11li_c11wt_lfc, color_category='firebrick',
+                     colorEdge=TRUE, cex_category = 1, cex_gene = 0.8,
+                     cex_label_category = 1, cex_label_gene=0.8)+
+  ggtitle("C11MT vs C11WT Selected Pathways\n(Genes with padj<0.05 are displayed)")+
+  theme(legend.text = element_text(size=12),
+        legend.title = element_text(size=12),
+        plot.title = element_text(size=28, face="bold"))
+dev.off()
+
+geneList_c11li_c11wt <- df_c11li_c11wt$lfc
+names(geneList_c11li_c11wt) <- df_c11li_c11wt$ENTREZID
+  
+de_c11li_c11wt <- names(geneList_c11li_c11wt)
+
+edo_c11li_c11wt <- enrichDGN(de_c11li_c11wt)
+
+disease_list_c11li_c11wt <- subset(edo_c11li_c11wt, grepl("Lymphoma", edo_c11li_c11wt@result[["Description"]]))$Description 
+
+edox_c11li_c11wt <- setReadable(edo_c11li_c11wt, 'org.Hs.eg.db', 'ENTREZID')
+
+pdf("barplot_lymphoma_c11li_c11wt.pdf", width=12, height = 5)
+barplot(edo_c11li_c11wt, showCategory=disease_list_c11li_c11wt[c(1:10)])+
+  ggtitle("Top 10 Lymphomas associated with C11MT vs C11WT upregulated genes (LFC > 1)")+
+  theme(plot.title = element_text(size=15, face="bold"))
+dev.off()
+
+pdf("barplot_c11li_c11wt.pdf", width=10, height = 5)
+barplot(edo_c11li_c11wt, showCategory = 10)+
+  ggtitle("Top 10 disease phenotypes associated with C11MT vs C11WT\nupregulated genes (LFC > 1)")+
+  theme(plot.title = element_text(size=14, face="bold"))
+dev.off()
+
+
+pdf("heatplot_lymphoma_c11li_c11wt.pdf", width = 15, height=5)
+heatplot(edox_c11li_c11wt, showCategory = disease_list_c11li_c11wt[c(1:10)], 
+         foldChange = geneList_c11li_c11wt)+
+  ggtitle("Top 10 Lymphomas associated with C11MT vs C11WT upregulated genes (LFC > 1)")+
+  theme(axis.text.y=element_text(size=10, face = "bold"),
+        axis.text.x=element_text(size=12, face="bold"),
+        plot.title = element_text(size=14, face="bold"))
+dev.off()
+
+
+pdf("cnetplot_lymphomas_c11li_c11wt.pdf", width = 15, height = 15)
+cnetplot(edox_c11li_c11wt, foldChange=geneList_c11li_c11wt, 
+         showCategory = disease_list_c11li_c11wt[c(1:10)],
+         colorEdge=TRUE, 
+         circular=TRUE,
+         color_category = "firebrick", 
+         cex_label_category = 0.8, cex_label_gene=0.8)+
+  ggtitle("Top 10 Lymphomas associated with C11MT VS C11WT Upregulated Genes (LFC > 1)")+
+  theme(plot.title = element_text(size=18, face = "bold"))
+dev.off()
+
+
+
+
+write.xlsx(c11li_c11wt_gsea, "c11li_c11wt_gsea.xlsx")
+
+```
+
+
+```{r}
+pdf("Reactome_c11li_c11wt.pdf", width=24, height=18)
+for(i in 1:nrow(c11li_c11wt_gsea)){
+  ID <- c11li_c11wt_gsea$ID[i]
+  Description <- c11li_c11wt_gsea$Description[i]
+  genelist <- event2Ids(ID)[["geneSymbol"]]
+  
+  print(ggplot(c11li_c11wt_list, aes(x=log2FoldChange, y=(minuslogp)))+
+          geom_point(size=2.25,color="grey", alpha=0.4)+
+          geom_point(data=subset(c11li_c11wt_list, c11li_c11wt_list$gene %in% genelist), color="red3", alpha=1, size=5)+
+        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+          ggtitle("CARD11 Mutant vs WT")+
+          theme(plot.title = element_text(size = 60, face = "bold"))+
+          xlab("Log2FoldChange")+
+          theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+          ylab("-log10(p-adj)")+
+          theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+          geom_vline(xintercept = 1, linetype="dashed")+
+          geom_vline(xintercept = -1, linetype="dashed")+
+          geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+          geom_label_repel(data=subset(c11li_c11wt_list, gene %in% genelist & (c11li_c11wt_list$padj < 0.055 & abs(c11li_c11wt_list$log2FoldChange) > 0.9)), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = Inf)+
+          annotate("text", x=-5, y=50, label=paste0(Description), size=12, hjust=0, color="red3")+
+          annotate("text", x=-5, y=45, label=paste0(ID), size=12, hjust=0, color="red3"))}
+dev.off()
+```
+
+```{r}
+res_t6li_t6wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","T6_C11_WT"), alpha = 0.05)
 summary(res_t6li_t6wt)
 ```
 
@@ -317,68 +771,271 @@ summary(res_t6li_t6wt)
 t6li_t6wt_list<-data.frame(gene = rownames(res_t6li_t6wt), res_t6li_t6wt,
 stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
 
-png(file="Volcano_t6li_t6wt.png", width=1980, height=1440)
+t6li_t6wt_sorted <- t6li_t6wt_list %>% 
+  arrange(desc(abs(LFCminuslogp)))
+
+write.xlsx(t6li_t6wt_sorted, "t6li_t6wt_sorted.xlsx")
+
+pdf(file="Volcano_t6li_t6wt.pdf", width=24, height=21)
 ggplot(t6li_t6wt_list, aes(x=log2FoldChange, y=(minuslogp)))+
   geom_point(size=2.25,color="grey", alpha=0.5)+
-  geom_point(data=subset(t6li_t6wt_list, minuslogp>(-log10(0.1))), size=2.25,color="darkorange1", alpha=1)+
-  geom_point(data=subset(t6li_t6wt_list, minuslogp>(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
-  geom_point(data=subset(t6li_t6wt_list, minuslogp<(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  geom_point(data=subset(t6li_t6wt_list, minuslogp>(-log10(0.05))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(t6li_t6wt_list, minuslogp>(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(t6li_t6wt_list, minuslogp<(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
   ggtitle("CARD11 Mutant vs WT (TRAF6 KO)")+
   theme(plot.title = element_text(size = 60, face = "bold"))+
-  #scale_x_continuous(breaks = seq(-20, 20, by = 5))+
-  #scale_y_continuous(breaks = seq(-30, 80, by = 10))+
   xlab("Log2FoldChange")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
   ylab("-log10(p-adj)")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
   geom_vline(xintercept = 1, linetype="dashed")+
   geom_vline(xintercept = -1, linetype="dashed")+
-  geom_hline(yintercept = -log10(0.1), linetype="dashed")+
-  geom_label_repel(data=subset(t6li_t6wt_list, minuslogp>1 | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", nudge_y = 0.5, fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)
-  #geom_point(aes(x=-3.5, y=40.5), color="red3", size=20)+
-  #geom_point(aes(x=-3.5, y=38), color="darkorange1", size=20)+
-  #geom_point(aes(x=-3.5, y=35.5), color="yellowgreen", size=20)+
-  #annotate("text", x=-3.3, y=40.55, label="p-adj<0.1 |LFC|>1", size=12, hjust=0)+
-  #annotate("text", x=-3.3, y=38.05, label="p-adj<0.1 |LFC|<1", size=12, hjust=0)+
-  #annotate("text", x=-3.3, y=35.55, label="p-adj>0.1 |LFC|>1", size=12, hjust=0)
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(t6li_t6wt_list, minuslogp>(-log10(0.05)) | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", nudge_y = 0.5, fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)
 dev.off()
 ```
+
 ```{r}
-res_t6li_c11li <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","BJAB_C11_LI"), alpha = 0.1)
+t6li_t6wt_list<-data.frame(gene = rownames(res_t6li_t6wt), res_t6li_t6wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+
+pdf(file="Volcano_t6li_t6wt_nfkb.pdf", width=24, height=21)
+ggplot(t6li_t6wt_list, aes(x=log2FoldChange, y=(minuslogp)))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(t6li_t6wt_list, minuslogp>(-log10(0.05))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(t6li_t6wt_list, minuslogp>(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(t6li_t6wt_list, minuslogp<(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("CARD11 Mutant vs WT (TRAF6 KO)")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  xlab("Log2FoldChange")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("-log10(p-adj)")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = 1, linetype="dashed")+
+  geom_vline(xintercept = -1, linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(t6li_t6wt_list, gene %in% c(Nfkb_genes, Zc3H12_genes)), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = Inf)
+dev.off()
+```
+
+
+```{r}
+res_t6li_t6wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","T6_C11_WT"), alpha = 0.05)
+
+res_t6li_t6wt<-data.frame(rn=rownames(res_t6li_t6wt),res_t6li_t6wt) %>% na.omit()
+#make a named vector of P adjusted
+t6li_t6wt_gsea <- res_t6li_t6wt$padj 
+names(t6li_t6wt_gsea) <- res_t6li_t6wt$rn
+
+
+ensgEntrez_t6li_t6wt_gsea <- AnnotationDbi::select(org.Hs.eg.db, keys=names(t6li_t6wt_gsea), columns='ENTREZID', keytype='SYMBOL')
+
+df_t6li_t6wt_gsea <- ensgEntrez_t6li_t6wt_gsea %>%
+  dplyr::inner_join(res_t6li_t6wt, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj))
+
+t6li_t6wt_lfc<-df_t6li_t6wt_gsea$lfc 
+names(t6li_t6wt_lfc)<-df_t6li_t6wt_gsea$ENTREZID
+
+y_t6li_t6wt <- gsePathway(sort((t6li_t6wt_lfc), decreasing=T), organism = "human", pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F, eps=0)
+
+y_t6li_t6wt <- setReadable(y_t6li_t6wt, 'org.Hs.eg.db', 'ENTREZID')
+
+t6li_t6wt_gsea <- y_t6li_t6wt@result
+t6li_t6wt_gsea <- t6li_t6wt_gsea %>% arrange(desc(NES))
+
+pathway_list_t6li_t6wt <- c("Interleukin-10 signaling",
+                  "TNFR2 non-canonical NF-kB pathway",
+                  "Interleukin-4 and Interleukin-13 signaling",
+                  "Signaling by Interleukins")
+
+geneSetID_t6li_t6wt = match(pathway_list_t6li_t6wt,
+                              y_t6li_t6wt@result[["Description"]])
+
+pdf("gseaplot2_t6li_t6wt.pdf", width=12, height=9)
+gseaplot2(y_t6li_t6wt, geneSetID = geneSetID_t6li_t6wt[!is.na(geneSetID_t6li_t6wt)], 
+          pvalue_table = FALSE, 
+          title="T6KO C11MT vs T6KO C11WT Selected Pathways",
+          base_size = 16,
+          rel_heights = c(2,0.3,0.5))+
+  theme(axis.text = element_text(size=12, face = "bold"),
+        axis.title = element_text(size=16))
+dev.off()
+
+edo2_t6li_t6wt <- gseDO(sort((t6li_t6wt_lfc), decreasing=T))
+
+res_t6li_t6wt_greater<-DESeq2::results(dds,
+                                         contrast=c("Sample_Group",
+                                                    "T6_C11_LI", "T6_C11_WT"),
+                                         alpha = 0.05, altHypothesis = "greater") 
+
+res_t6li_t6wt_greater<-data.frame(rn=
+                                rownames(res_t6li_t6wt_greater),
+                                res_t6li_t6wt_greater) %>% na.omit()
+
+#make a named vector of P adjusted
+t6li_t6wt_up <- res_t6li_t6wt_greater$padj 
+names(t6li_t6wt_up) <- res_t6li_t6wt_greater$rn
+
+ensgEntrez_t6li_t6wt <- AnnotationDbi::select(org.Hs.eg.db, keys=names(t6li_t6wt_up), columns='ENTREZID', keytype='SYMBOL')
+
+df_t6li_t6wt <-ensgEntrez_t6li_t6wt %>%
+  dplyr::inner_join(res_t6li_t6wt_greater, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj)) %>%
+  dplyr::filter(lfc > 1)
+
+df_t6li_t6wt_sig_up <-ensgEntrez_t6li_t6wt %>%
+  dplyr::inner_join(res_t6li_t6wt_greater, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj))
+
+sg<-unique((df_t6li_t6wt_sig_up %>% dplyr::filter(up<=0.05))$ENTREZID)
+
+x_t6li_t6wt_up <- enrichPathway(gene=sg,organism = "human",
+pvalueCutoff=0.1, pAdjustMethod="BH", readable=T)
+
+pdf("heatplot_t6li_t6wt.pdf", width=8, height=3)
+enrichplot::heatplot(x_t6li_t6wt_up, 
+                     showCategory = pathway_list_t6li_t6wt, 
+                     foldChange = t6li_t6wt_lfc) +
+  ggtitle("T6KO C11MT vs T6KO C11WT Selected Pathways\n(Genes with padj<0.05 are displayed)")+
+  theme(axis.text.y=element_text(size=10, face = "bold"),
+        axis.text.x=element_text(size=9, face="bold"),
+        plot.title = element_text(size = 12, face="bold"))
+dev.off()
+
+pdf("cnetplot_t6li_t6wt.pdf", width=14, height=10)
+enrichplot::cnetplot(x_t6li_t6wt_up,
+                     showCategory = pathway_list_t6li_t6wt,
+                     foldChange = t6li_t6wt_lfc,
+                     colorEdge=TRUE, 
+                     color_category='firebrick', 
+                     cex_category = 2, cex_gene = 1,
+                     cex_label_category = 1.2, cex_label_gene=1)+
+  ggtitle("T6KO C11MT vs T6KO C11WT Selected Pathways (Genes with padj<0.05 are displayed)")+
+  theme(legend.text = element_text(size=12),
+        legend.title = element_text(size=12),
+        plot.title = element_text(size = 24, face="bold"))
+dev.off()
+
+geneList_t6li_t6wt <- df_t6li_t6wt$lfc
+names(geneList_t6li_t6wt) <- df_t6li_t6wt$ENTREZID
+  
+de_t6li_t6wt <- names(geneList_t6li_t6wt)
+
+edo_t6li_t6wt <- enrichDGN(de_t6li_t6wt)
+
+disease_list_t6li_t6wt <- subset(edo_t6li_t6wt, grepl("Lymphoma", edo_t6li_t6wt@result[["Description"]]))$Description 
+
+edox_t6li_t6wt <- setReadable(edo_t6li_t6wt, 'org.Hs.eg.db', 'ENTREZID')
+
+
+pdf("barplot_lymphoma_t6li_t6wt.pdf", width=12, height = 15)
+barplot(edo_t6li_t6wt, showCategory=disease_list_t6li_t6wt)+
+  ggtitle("Lymphomas associated with T6KO C11MT vs T6KO C11WT upregulated genes (LFC > 1)")+
+  theme(plot.title = element_text(size=15, face="bold"))
+dev.off()
+
+pdf("barplot_t6li_t6wt.pdf", width=12, height = 12)
+barplot(edo_t6li_t6wt, showCategory = 10)+
+  ggtitle("Top 10 disease phenotypes associated with T6KO C11MT vs T6KO C11WT upregulated genes (LFC > 1)")+
+  theme(plot.title = element_text(size=14, face="bold"))
+dev.off()
+
+pdf("heatplot_lymphoma_t6li_t6wt.pdf", width = 15, height=5)
+heatplot(edox_t6li_t6wt, showCategory = disease_list_t6li_t6wt[c(1:10)], 
+         foldChange = geneList_t6li_t6wt)+
+  ggtitle("Top 10 Lymphomas associated with T6KO C11MT vs T6KO C11WT upregulated genes (LFC > 1)")+
+  theme(axis.text.y=element_text(size=10, face = "bold"),
+        axis.text.x=element_text(size=12, face="bold"),
+        plot.title = element_text(size=14, face="bold"))
+dev.off()
+
+pdf("cnetplot_lymphoma_t6li_t6wt.pdf", width = 15, height = 15)
+cnetplot(edox_t6li_t6wt, foldChange=geneList_t6li_t6wt, 
+         showCategory = disease_list_t6li_t6wt[c(1:10)], 
+         colorEdge=TRUE, 
+         circular=TRUE,
+         color_category = "firebrick", 
+         cex_label_category = 0.8, cex_label_gene=0.8)+
+  ggtitle("Top 10 Lymphomas associated with T6KO C11MT VS T6KO C11WT Upregulated Genes (LFC > 1)")+
+  theme(plot.title = element_text(size=18, face = "bold"))
+dev.off()
+
+
+
+write.xlsx(t6li_t6wt_gsea, "t6li_t6wt_gsea.xlsx")
+```
+
+```{r}
+pdf("Reactome_t6li_t6wt.pdf", width=24, height=18)
+for(i in 1:nrow(t6li_t6wt_gsea)){
+  ID <- t6li_t6wt_gsea$ID[i]
+  Description <- t6li_t6wt_gsea$Description[i]
+  genelist <- event2Ids(ID)[["geneSymbol"]]
+  
+  print(ggplot(t6li_t6wt_list, aes(x=log2FoldChange, y=(minuslogp)))+
+          geom_point(size=2.25,color="grey", alpha=0.4)+
+          geom_point(data=subset(t6li_t6wt_list, t6li_t6wt_list$gene %in% genelist), color="red3", alpha=1, size=5)+
+        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+          ggtitle("CARD11 Mutant vs WT (TRAF6 KO)")+
+          theme(plot.title = element_text(size = 60, face = "bold"))+
+          xlab("Log2FoldChange")+
+          theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+          ylab("-log10(p-adj)")+
+          theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+          geom_vline(xintercept = 1, linetype="dashed")+
+          geom_vline(xintercept = -1, linetype="dashed")+
+          geom_hline(yintercept = -log10(0.1), linetype="dashed")+
+          geom_label_repel(data=subset(t6li_t6wt_list, gene %in% genelist & (t6li_t6wt_list$padj < 0.055 & abs(t6li_t6wt_list$log2FoldChange) > 0.9)), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = Inf)+
+          annotate("text", x=-1.2, y=15, label=paste0(Description), size=12, hjust=0, color="red3")+
+          annotate("text", x=-1.2, y=14, label=paste0(ID), size=12, hjust=0, color="red3"))}
+dev.off()
+```
+
+
+
+```{r}
+res_t6li_c11li <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","BJAB_C11_LI"), alpha = 0.05)
 summary(res_t6li_c11li)
 ```
 ```{r}
 t6li_c11li_list<-data.frame(gene = rownames(res_t6li_c11li), res_t6li_c11li,
 stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
 
+t6li_c11li_sorted <- t6li_c11li_list %>% 
+  arrange(desc(abs(LFCminuslogp)))
+
+write.xlsx(t6li_c11li_sorted, "t6li_c11li_sorted.xlsx")
+
 png(file="Volcano_t6li_c11li.png", width=1980, height=1440)
 ggplot(t6li_c11li_list, aes(x=log2FoldChange, y=(minuslogp)))+
   geom_point(size=2.25,color="grey", alpha=0.5)+
-  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.1))), size=2.25,color="darkorange1", alpha=1)+
-  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
-  geom_point(data=subset(t6li_c11li_list, minuslogp<(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.05))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp<(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
-  ggtitle("CARD11 Mutant vs WT (TRAF6 KO)")+
+  ggtitle("TRAF6 KO vs WT (Both CARD11 Mutants)")+
   theme(plot.title = element_text(size = 60, face = "bold"))+
-  #scale_x_continuous(breaks = seq(-20, 20, by = 5))+
-  #scale_y_continuous(breaks = seq(-30, 80, by = 10))+
   xlab("Log2FoldChange")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
   ylab("-log10(p-adj)")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
   geom_vline(xintercept = 1, linetype="dashed")+
   geom_vline(xintercept = -1, linetype="dashed")+
-  geom_hline(yintercept = -log10(0.1), linetype="dashed")+
-  geom_label_repel(data=subset(t6li_c11li_list, minuslogp>1 | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = 8)
-  #geom_point(aes(x=-3.5, y=40.5), color="red3", size=20)+
-  #geom_point(aes(x=-3.5, y=38), color="darkorange1", size=20)+
-  #geom_point(aes(x=-3.5, y=35.5), color="yellowgreen", size=20)+
-  #annotate("text", x=-3.3, y=40.55, label="p-adj<0.1 |LFC|>1", size=12, hjust=0)+
-  #annotate("text", x=-3.3, y=38.05, label="p-adj<0.1 |LFC|<1", size=12, hjust=0)+
-  #annotate("text", x=-3.3, y=35.55, label="p-adj>0.1 |LFC|>1", size=12, hjust=0)
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(t6li_c11li_list, minuslogp>(-log10(0.05)) | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = 8)
 dev.off()
 ```
 
@@ -389,34 +1046,1072 @@ stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") 
 png(file="Volcano_t6li_c11li_nfkb.png", width=1980, height=1440)
 ggplot(t6li_c11li_list, aes(x=log2FoldChange, y=(minuslogp)))+
   geom_point(size=2.25,color="grey", alpha=0.5)+
-  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.1))), size=2.25,color="darkorange1", alpha=1)+
-  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
-  geom_point(data=subset(t6li_c11li_list, minuslogp<(-log10(0.1)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.05))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(t6li_c11li_list, minuslogp<(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
-  ggtitle("CARD11 Mutant vs WT (TRAF6 KO)")+
+  ggtitle("TRAF6 KO vs WT (Both CARD11 Mutants)")+
   theme(plot.title = element_text(size = 60, face = "bold"))+
-  #scale_x_continuous(breaks = seq(-20, 20, by = 5))+
-  #scale_y_continuous(breaks = seq(-30, 80, by = 10))+
   xlab("Log2FoldChange")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
   ylab("-log10(p-adj)")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
   geom_vline(xintercept = 1, linetype="dashed")+
   geom_vline(xintercept = -1, linetype="dashed")+
-  geom_hline(yintercept = -log10(0.1), linetype="dashed")+
-  geom_label_repel(data=subset(t6li_c11li_list, gene %in% Nfkb_genes), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = 8)
-  #geom_point(aes(x=-3.5, y=40.5), color="red3", size=20)+
-  #geom_point(aes(x=-3.5, y=38), color="darkorange1", size=20)+
-  #geom_point(aes(x=-3.5, y=35.5), color="yellowgreen", size=20)+
-  #annotate("text", x=-3.3, y=40.55, label="p-adj<0.1 |LFC|>1", size=12, hjust=0)+
-  #annotate("text", x=-3.3, y=38.05, label="p-adj<0.1 |LFC|<1", size=12, hjust=0)+
-  #annotate("text", x=-3.3, y=35.55, label="p-adj>0.1 |LFC|>1", size=12, hjust=0)
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(t6li_c11li_list, gene %in% c(Nfkb_genes, Zc3H12_genes)), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = Inf)
+dev.off()
+```
+
+
+```{r}
+res_t6li_c11li<-data.frame(rn=rownames(res_t6li_c11li),res_t6li_c11li) %>% na.omit()
+#make a named vector of P adjusted
+t6li_c11li_gsea <- res_t6li_c11li$padj 
+names(t6li_c11li_gsea) <- res_t6li_c11li$rn
+
+
+ensgEntrez_t6li_c11li_gsea <- AnnotationDbi::select(org.Hs.eg.db, keys=names(t6li_c11li_gsea), columns='ENTREZID', keytype='SYMBOL')
+
+df_t6li_c11li_gsea <- ensgEntrez_t6li_c11li_gsea %>%
+  dplyr::inner_join(res_t6li_c11li, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj))
+
+t6li_c11li_lfc<-df_t6li_c11li_gsea$lfc 
+names(t6li_c11li_lfc)<-df_t6li_c11li_gsea$ENTREZID
+
+y_t6li_c11li <- gsePathway(sort((t6li_c11li_lfc), decreasing=T), organism = "human", pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F)
+
+t6li_c11li_gsea <- y_t6li_c11li@result
+t6li_c11li_gsea <- t6li_c11li_gsea %>% arrange(desc(NES))
+
+write.xlsx(t6li_c11li_gsea, "t6li_c11li_gsea.xlsx")
+
+range <- c((nrow(t6li_c11li_gsea)-5):nrow(t6li_c11li_gsea))
+for(i in range){print(gseaplot(y_t6li_c11li, geneSetID = t6li_c11li_gsea$ID[i], title=t6li_c11li_gsea$Description[i]))}
+```
+
+```{r}
+ids <- event2Ids("R-HSA-6783783")
+```
+
+```{r}
+pdf("Reactome_t6li_c11li.pdf", width=24, height=18)
+for(i in 1:nrow(t6li_c11li_gsea)){
+  ID <- t6li_c11li_gsea$ID[i]
+  Description <- t6li_c11li_gsea$Description[i]
+  genelist <- event2Ids(ID)[["geneSymbol"]]
+  
+  print(ggplot(t6li_c11li_list, aes(x=log2FoldChange, y=(minuslogp)))+
+          geom_point(size=2.25,color="grey", alpha=0.4)+
+          geom_point(data=subset(t6li_c11li_list, t6li_c11li_list$gene %in% genelist), color="red3", alpha=1, size=5)+
+        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+          ggtitle("TRAF6 KO vs WT (Both CARD11 Mutants)")+
+          theme(plot.title = element_text(size = 60, face = "bold"))+
+          xlab("Log2FoldChange")+
+          theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+          ylab("-log10(p-adj)")+
+          theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+          geom_vline(xintercept = 1, linetype="dashed")+
+          geom_vline(xintercept = -1, linetype="dashed")+
+          geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+          geom_label_repel(data=subset(t6li_c11li_list, gene %in% genelist & (t6li_c11li_list$padj < 0.055 & abs(t6li_c11li_list$log2FoldChange) > 0.9)), aes(label=gene), size=6, color="black", fontface="bold", max.overlaps = Inf)+
+          annotate("text", x=-5, y=50, label=paste0(Description), size=12, hjust=0, color="red3")+
+          annotate("text", x=-5, y=45, label=paste0(ID), size=12, hjust=0, color="red3"))}
+dev.off()
+```
+
+
+```{r}
+heatmap_list <- c("CD80", "TNFRSF13B", "IL10", "NFKBIA", "CAMK2B", "CCL22", "HLA-DQA1",
+                  "LTB", "IL2RG", "ICAM1", "BIRC3", "CD70", "CASP1", "CCL3L1", "TNFSF11",
+                  "MAP2K2", "CXCL10", "RELB", "SSTR2", "BCL2A1", "CCR7", "OAS1", "OAS2",
+                  "OAS3", "MX1", "MX2", "STAT1", "TRIM5", "TRIM22", "MAPK10", "IFIT2",
+                  "YES1", "IFNB1", "ANXA2", "PELI2", "EIF2AK2", "IRF9", "IRS1", "IFI35",
+                  "XAF1", "IRF7", "IFI6", "IL10RA", "CD27", "PML", "BST2", "UBE2L6",
+                  "USP18", "USP41", "TNFSF8", "SLA2", "CD4", "HLA-C", "HMOX1", "NFKBIA",
+                  "NFKB1", "NFKBID", "NFKBIZ", "ZC3H12A", "PPP3CA", "RGS18", "TIMP1",
+                  "CAMK2B", "RSAD2", "CD70", "ZC3H12D")
+
+```  
+  
+
+```{r}
+res_t6wt_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_WT","BJAB_C11_WT"), alpha = 0.05)
+summary(res_t6wt_c11wt)
+```
+
+```{r}
+t6wt_c11wt_list<-data.frame(gene = rownames(res_t6wt_c11wt), res_t6wt_c11wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+
+t6wt_c11wt_sorted <- t6wt_c11wt_list %>% 
+  arrange(desc(abs(LFCminuslogp)))
+
+write.xlsx(t6wt_c11wt_sorted, "t6wt_c11wt_sorted.xlsx")
+
+png(file="Volcano_t6wt_c11wt.png", width=1980, height=1440)
+ggplot(t6wt_c11wt_list, aes(x=log2FoldChange, y=(minuslogp)))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(t6wt_c11wt_list, minuslogp>(-log10(0.05))), size=2.25,color="darkorange1", alpha=1)+
+  geom_point(data=subset(t6wt_c11wt_list, minuslogp>(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="red3", alpha=1)+
+  geom_point(data=subset(t6wt_c11wt_list, minuslogp<(-log10(0.05)) & abs(log2FoldChange)>(1)), size=2.25,color="yellowgreen", alpha=1)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("T6KO C11WT vs T6WT C11WT")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  xlab("Log2FoldChange")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("-log10(p-adj)")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = 1, linetype="dashed")+
+  geom_vline(xintercept = -1, linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(t6wt_c11wt_list, minuslogp>(-log10(0.05)) | abs(log2FoldChange)>1), aes(label=gene), size=6, color="black", nudge_y = 0.5, fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)
 dev.off()
 ```
 
 
 
+```{r}
+df <- as.data.frame(as.data.frame(coldata)$Sample_Group) 
+rownames(df) <- row.names(coldata)
+colnames(df) <- c("SampleGroup")
+df <- df %>% dplyr::arrange(SampleGroup)
+
+df_t6_ko <- df %>% dplyr::filter(SampleGroup %in% c("BJAB_C11_LI","BJAB_C11_WT", 
+                                                    "T6_C11_LI", "T6_C11_WT"))
+
+
+vsdMat_t6_ko <- vsdMat[,row.names(df_t6_ko)]
+
+
+png("Heatmap.png", width=1280, height = 1440)
+pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% heatmap_list), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 20, fontsize_col = 20, fontsize_row = 20)
+dev.off()
+
+#heatmap_df <- data.frame(cluster=cutree(heatmap$tree_row, k=3))
+```
+
+
+```{r}
+genelist <- c(Nfkb_genes, Zc3H12_genes)
+
+for (i in genelist) {
+  if (i %in% row.names(vsdMat)) #Choose the ones that remained after DeSEQ
+  j <- plotCounts(dds, gene=i, intgroup="Sample_Group", returnData = TRUE)
+  temp_plot <- ggplot(j, aes(x=Sample_Group, y=count))+
+    geom_boxplot(aes(fill = factor(Sample_Group)),alpha = 0.7,outlier.shape = NA)+
+    geom_point(position = position_jitter(width = 0.1, height = 0))+
+    labs(x = "Sample Group",
+             y="Normalized Counts (log10 transformed)",
+             title = i)+ 
+    scale_fill_manual(breaks = c("BJAB_C11_WT","BJAB_C11_LI", "T6_C11_WT",
+                                 "T6_C11_LI", "T6_C11_LI_DMSO", "T6_C11_LI_MLT-748"),
+                      values= c("yellowgreen", "deeppink3", "darkslategray", "red3",
+                                "darkorange1", "royalblue3")) +
+    scale_x_discrete(limits=c("BJAB_C11_WT","BJAB_C11_LI", "T6_C11_WT",
+                                 "T6_C11_LI", "T6_C11_LI_DMSO", "T6_C11_LI_MLT-748"))+
+    theme_classic() +
+        theme(axis.text = element_text(size=9, angle=90, face="bold"),
+              title = element_text(size=10)) +
+        guides(fill = "none")+
+    scale_y_log10()
+   ggsave(temp_plot,path = "Plots_from_genelist",file = paste0(i,".png"),
+             width=6, height = 4.5, units="in")}
+```
 
 
 
+```{r}
+res_t6li_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","BJAB_C11_WT"), alpha = 0.05)
+
+res_t6wt_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_WT","BJAB_C11_WT"), alpha = 0.05)
+```
+
+```{r}
+a<-data.frame(gene = rownames(res_t6li_c11wt), res_t6li_c11wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), lfcsign = log2FoldChange/abs(log2FoldChange), signlogp = lfcsign*minuslogp) 
+b<-data.frame(gene = rownames(res_t6wt_c11wt), res_t6wt_c11wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj")%>% dplyr::mutate(minuslogp = -log10(padj), lfcsign = log2FoldChange/abs(log2FoldChange), signlogp = lfcsign*minuslogp) 
+
+c <- merge(a,b,by=0) 
+d <- c %>% 
+  dplyr::filter(padj.x<0.05, padj.y<0.05)
+e <- c %>%
+  dplyr::filter(padj.x < 0.05 | padj.y < 0.05)
+
+png(file="signlog_commonUp.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-70, 70, by = 5))+
+  scale_y_continuous(breaks = seq(-50, 80, by = 10))+
+  xlab("T6KO C11MT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("T6KO C11WT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, signlogp.x>5 & signlogp.y>5), aes(label=Row.names), size=6, color="black", fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = Inf)+
+  stat_cor(method = "spearman", size=12, label.y = 55, label.x = -50)+
+  annotate("text", x=-55, y=60, label="Spearman's Correlation of all genes:",
+           vjust=0, hjust=0, size = 13)
+dev.off()
+
+png(file="LFCcomparison.png", width=1980, height=1440)
+ggplot(c, aes(x=log2FoldChange.x, y=log2FoldChange.y))+
+  geom_point(size=2.5,color="grey", alpha=0.8)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.5,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) + 
+  xlim(-4,7.5)+
+  ylim(-4,7.5)+
+  ggtitle("LFC Comparison at p-adj<0.05 (Cross Comparison)")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  xlab("T6KO C11MT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=25, face = "bold"))+
+  ylab("T6KO C11WT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=25, face = "bold"))+
+  geom_label_repel(data=subset(d, log2FoldChange.x<(-1) & log2FoldChange.y<(-1)), aes(label=Row.names), size=7.5, color="black", nudge_y = 0.05, fontface = "bold", min.segment.length = unit(0.3, "lines"))+
+  geom_label_repel(data=subset(d, log2FoldChange.x>(0.5) & log2FoldChange.y<(0)), aes(label=Row.names), size=7.5, color="black", nudge_y = 0.05, fontface = "bold", min.segment.length = unit(0.3, "lines"))+
+  geom_label_repel(data=subset(e, log2FoldChange.x>2 | log2FoldChange.y<(-2.5)), aes(label=Row.names), size=7.5, color="black", nudge_y = 0.05, fontface = "bold", min.segment.length = unit(0.3, "lines"))+
+  stat_cor(data=d,method = "spearman", size=12, label.y = 5.5, label.x = -2.85, fontface="italic")+
+  annotate("text", x=-1.85, y=6.5, label="Spearman's Correlation of only\ncommonly significant genes", size = 13, fontface="italic")+
+  geom_hline(yintercept = 0, linetype="dashed")+
+  geom_vline(xintercept=0, linetype="dashed")
+dev.off()  
+```
+```{r}
+png(file="signlog_commonDown.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-70, 70, by = 5))+
+  scale_y_continuous(breaks = seq(-50, 80, by = 10))+
+  xlab("T6KO C11MT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("T6KO C11WT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, signlogp.x<(-5) & signlogp.y<(-5)), aes(label=Row.names), size=6, color="black", fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = Inf)+
+  stat_cor(method = "spearman", size=12, label.y = 55, label.x = -50)+
+  annotate("text", x=-55, y=60, label="Spearman's Correlation of all genes:",
+           vjust=0, hjust=0, size = 13)
+dev.off()
+```
+
+```{r}
+png(file="signlog1.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-70, 70, by = 5))+
+  scale_y_continuous(breaks = seq(-50, 80, by = 10))+
+  xlab("T6KO C11MT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("T6KO C11WT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, signlogp.x>3 & abs(signlogp.y)<(-log10(0.05))), aes(label=Row.names), size=6, color="black", fontface="bold", nudge_y = -20, min.segment.length = unit(0, "lines"), max.overlaps = Inf)
+dev.off()
+```
+```{r}
+png(file="signlog2.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-70, 70, by = 5))+
+  scale_y_continuous(breaks = seq(-50, 80, by = 10))+
+  xlab("T6KO C11MT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("T6KO C11WT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, signlogp.x<(-3) & abs(signlogp.y)<(-log10(0.05))), aes(label=Row.names), size=6, color="black", nudge_y = 20, fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = Inf)
+dev.off()
+```
+```{r}
+png(file="signlog3.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-70, 70, by = 5))+
+  scale_y_continuous(breaks = seq(-50, 80, by = 10))+
+  xlab("T6KO C11MT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("T6KO C11WT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, abs(signlogp.x)<(-log10(0.05)) & signlogp.y<(-2)), aes(label=Row.names), size=6, color="black", nudge_x = 20, nudge_y=-20, fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = Inf)
+dev.off()
+```
+```{r}
+png(file="signlog4.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.1 & padj.y<0.1), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.1 & padj.y>0.1), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-70, 70, by = 5))+
+  scale_y_continuous(breaks = seq(-50, 80, by = 10))+
+  xlab("T6KO C11MT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("T6KO C11WT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.1), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.1), linetype="dashed")+
+  geom_hline(yintercept = log10(0.1), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.1), linetype="dashed")+
+  geom_label_repel(data=subset(c, abs(signlogp.x)<1 & signlogp.y>(-log10(0.05))), aes(label=Row.names), size=6, color="black", nudge_x = -20, nudge_y=20, fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = Inf)
+dev.off()
+```
+```{r}
+png(file="signlog_nfkb.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05& padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-70, 70, by = 5))+
+  scale_y_continuous(breaks = seq(-50, 80, by = 10))+
+  xlab("T6KO C11MT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("T6KO C11WT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, Row.names %in% c(Nfkb_genes, Zc3H12_genes)), aes(label=Row.names), size=6, color="black", fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = Inf)
+dev.off()
+```
+
+```{r}
+res_c11li_c11wt_sig_sort_p <-data.frame(gene = rownames(res_c11li_c11wt), res_c11li_c11wt,
+stringsAsFactors = F) %>% 
+  na.omit() %>%
+  filter(padj<0.05 & log2FoldChange > 1.0) %>%
+  arrange(padj) %>%
+  mutate(minuslogp = -log10(padj), minuslog2p = -log2(padj))
+
+res_t6li_t6wt_sig_sort_p <-data.frame(gene = rownames(res_t6li_t6wt), res_t6li_t6wt,
+stringsAsFactors = F) %>% 
+  na.omit() %>%
+  filter(padj<0.05 & log2FoldChange > 1.0) %>%
+  arrange(padj) %>%
+  mutate(minuslogp = -log10(padj), minuslog2p = -log2(padj))
+
+sig_genelist_c11li_c11wt <- res_c11li_c11wt_sig_sort_p$gene
+sig_genelist_t6li_t6wt <- res_t6li_t6wt_sig_sort_p$gene
+
+sig_list_combined <- unique(c(sig_genelist_c11li_c11wt, sig_genelist_t6li_t6wt))
+```
+
+```{r}
+df <- as.data.frame(as.data.frame(coldata)$Sample_Group) 
+rownames(df) <- row.names(coldata)
+colnames(df) <- c("SampleGroup")
+df <- df %>% dplyr::arrange(SampleGroup)
+
+df_t6_ko <- df %>% dplyr::filter(SampleGroup %in% c("BJAB_C11_LI","BJAB_C11_WT", 
+                                                    "T6_C11_LI", "T6_C11_WT"))
+
+
+vsdMat_t6_ko <- vsdMat[,row.names(df_t6_ko)]
+
+
+pdf("Heatmap_siglist.pdf", width=21, height = 28)
+pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_list_combined), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 25, fontsize_col = 25, fontsize_row = 20, angle_col = 90, main="Genes with |LFC|>1 & padj<0.05 in at least one of these comparisons:\n1) C11MT vs C11WT. 2) T6KO C11MT vs T6KO C11WT", legend_breaks = )
+dev.off()
+```
+```{r}
+pdf("Heatmap_siglist_c11li_c11wt.pdf", width=18, height = 24)
+pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_genelist_c11li_c11wt), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 25, fontsize_col = 25, fontsize_row = 20, angle_col = 90, main="Genes with |LFC|>1 & padj<0.05 in C11MT vs C11WT")
+dev.off()
+```
+```{r}
+pdf("Heatmap_siglist_t6li_t6wt.pdf", width=21, height = 18)
+pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_genelist_t6li_t6wt), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 25, fontsize_col = 25, fontsize_row = 20, angle_col = 90, main="Genes with |LFC|>1 & padj<0.05 in T6KO C11MT vs T6KO C11WT")
+dev.off()
+```
+
+```{r}
+heatmap_list_inhib_dmso <- c("TM2D3", "ZC3H12A", "ZC3H12D", "TFRC", "FCRL3", 
+                             "LFNG", "IL10", "NFKBIZ", "NFKBID")
+
+df <- as.data.frame(as.data.frame(coldata)$Sample_Group) 
+rownames(df) <- row.names(coldata)
+colnames(df) <- c("SampleGroup")
+df <- df %>% dplyr::arrange(SampleGroup)
+
+df_inhib_dmso <- df %>% 
+  dplyr::filter(SampleGroup %in% c("T6_C11_LI_DMSO","T6_C11_LI_MLT-748"))
+
+vsdMat_inhib_dmso <- vsdMat[,row.names(df_inhib_dmso)]
+
+pdf("Heatmap_inhib_dmso.pdf", width=7, height=4)
+pheatmap(subset(vsdMat_inhib_dmso, rownames(vsdMat_inhib_dmso) %in% heatmap_list_inhib_dmso), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=TRUE, annotation_col=df_inhib_dmso, scale = "row", fontsize = 10, fontsize_col = 10, fontsize_row = 10, angle_col = 90, main="Inhib vs DMSO Selected Genes")
+dev.off()
+```
+
+```{r}
+sig_genelist_inhib_dmso<- (inhib_dmso_sorted$gene)[1:10]
+
+pdf("Heatmap_siglist_inhib_dmso.pdf", width=7.5, height=5)
+pheatmap(subset(vsdMat_inhib_dmso, rownames(vsdMat_inhib_dmso) %in% sig_genelist_inhib_dmso), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=TRUE, annotation_col=df_inhib_dmso, scale = "row", fontsize = 10, fontsize_col = 10, fontsize_row = 10, angle_col = 90, main="Inhib vs DMSO Selected Genes")
+dev.off()
+```
+
+```{r}
+t6ko_list<-data.frame(gene = rownames(res_t6li_c11wt), res_t6li_c11wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+
+t6wt_list<-data.frame(gene = rownames(res_t6wt_c11wt), res_t6wt_c11wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+
+commonlist <- left_join(t6ko_list, t6wt_list, by="gene")
+
+commonlist <- commonlist %>% mutate(Significance = ifelse(commonlist$padj.x<=0.05 & commonlist$padj.y<=0.05, "Both", ifelse(commonlist$padj.x<=0.05 & commonlist$padj.y>0.05, "Only T6KO C11MT", ifelse(commonlist$padj.x>0.05 & commonlist$padj.y<=0.05, "Only T6WT C11 WT", "Neither"))))
+
+commonlist_excel <- commonlist %>%
+  dplyr::select(gene, log2FoldChange.x, padj.x, log2FoldChange.y, padj.y, Significance) %>%
+  dplyr::rename("Gene" = "gene", "LFC (T6KO C11MT vs Control)" = "log2FoldChange.x", "p-adj (T6KO C11MT vs Control)" = "padj.x", "LFC (T6KO C11WT vs Control)" = "log2FoldChange.y", "p-adj (T6KO C11WT vs Control)" = "padj.y")
+
+write.xlsx(commonlist_excel, "Cross Comparison List.xlsx")
+```
+
+```{r}
+res_inhib_t6li <- DESeq2::results(dds,
+                                contrast=c("Sample_Group","T6_C11_LI_MLT-748","T6_C11_LI"),
+                                alpha = 0.05)
+
+res_dmso_t6li <- DESeq2::results(dds,
+                                 contrast=c("Sample_Group","T6_C11_LI_DMSO","T6_C11_LI"),
+                                 alpha = 0.05)
+```
+
+```{r}
+a<-data.frame(gene = rownames(res_inhib_t6li), res_inhib_t6li,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), lfcsign = log2FoldChange/abs(log2FoldChange), signlogp = lfcsign*minuslogp) 
+b<-data.frame(gene = rownames(res_dmso_t6li), res_dmso_t6li,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj")%>% dplyr::mutate(minuslogp = -log10(padj), lfcsign = log2FoldChange/abs(log2FoldChange), signlogp = lfcsign*minuslogp) 
+
+c <- merge(a,b,by=0) 
+d <- c %>% 
+  dplyr::filter(padj.x<0.05, padj.y<0.05)
+e <- c %>%
+  dplyr::filter(padj.x < 0.05 | padj.y < 0.05)
+
+png(file="signlog_inhib_dmso_commonUp.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-20, 15, by = 1))+
+  scale_y_continuous(breaks = seq(-10, 15, by = 1))+
+  xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, signlogp.x>(-log10(0.05)) & signlogp.y>(-log10(0.05))), aes(label=Row.names), size=6, color="black", fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = Inf)+
+  stat_cor(method = "spearman", size=12, label.y = 6, label.x = -15)+
+  annotate("text", x=-15, y=7, label="Spearman's Correlation of all genes:",
+           vjust=0, hjust=0, size = 13)
+dev.off()
+
+png(file="LFCcomparison_inhib_dmso.png", width=1980, height=1440)
+ggplot(c, aes(x=log2FoldChange.x, y=log2FoldChange.y))+
+  geom_point(size=2.5,color="grey", alpha=0.8)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.5,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) + 
+  xlim(-4,7.5)+
+  ylim(-4,7.5)+
+  ggtitle("LFC Comparison at p-adj<0.1 (Cross Comparison)")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=25, face = "bold"))+
+  ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=25, face = "bold"))+
+  geom_label_repel(data=subset(d, log2FoldChange.x<(-1) & log2FoldChange.y<(-1)), aes(label=Row.names), size=7.5, color="black", nudge_y = 0.05, fontface = "bold", min.segment.length = unit(0.3, "lines"))+
+  geom_label_repel(data=subset(d, log2FoldChange.x>(0.5) & log2FoldChange.y<(0)), aes(label=Row.names), size=7.5, color="black", nudge_y = 0.05, fontface = "bold", min.segment.length = unit(0.3, "lines"))+
+  geom_label_repel(data=subset(e, log2FoldChange.x>2 | log2FoldChange.y<(-2.5)), aes(label=Row.names), size=7.5, color="black", nudge_y = 0.05, fontface = "bold", min.segment.length = unit(0.3, "lines"))+
+  stat_cor(data=d,method = "spearman", size=12, label.y = 5.5, label.x = -2.85, fontface="italic")+
+  annotate("text", x=-1.85, y=6.5, label="Spearman's Correlation of only\ncommonly significant genes", size = 13, fontface="italic")+
+  geom_hline(yintercept = 0, linetype="dashed")+
+  geom_vline(xintercept=0, linetype="dashed")
+dev.off()  
+```
+```{r}
+png(file="signlog_inhib_dmso_commonDown.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-20, 15, by = 1))+
+  scale_y_continuous(breaks = seq(-10, 15, by = 1))+
+  xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, signlogp.x<(-2) & signlogp.y<(-2)), aes(label=Row.names), size=6, color="black", fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = Inf)+
+  stat_cor(method = "spearman", size=12, label.y = 6, label.x = -15)+
+  annotate("text", x=-15, y=7, label="Spearman's Correlation of all genes:",
+           vjust=0, hjust=0, size = 13)
+dev.off()
+```
+```{r}
+png(file="signlog_inhib_dmso1.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-20, 15, by = 1))+
+  scale_y_continuous(breaks = seq(-10, 15, by = 1))+
+  xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, signlogp.x>(-log10(0.05)) & abs(signlogp.y)<1), aes(label=Row.names), size=6, color="black", fontface="bold",nudge_x = 4, nudge_y = -5, min.segment.length = unit(0, "lines"), max.overlaps = Inf)
+dev.off()
+```
+```{r}
+png(file="signlog_inhib_dmso2.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-20, 15, by = 1))+
+  scale_y_continuous(breaks = seq(-10, 15, by = 1))+
+  xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, signlogp.x<(-2) & abs(signlogp.y)<1), aes(label=Row.names), size=6, color="black", fontface="bold",nudge_x = -4, nudge_y = 5, min.segment.length = unit(0, "lines"), max.overlaps = Inf)
+dev.off()
+```
+
+```{r}
+png(file="signlog_inhib_dmso3.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-20, 15, by = 1))+
+  scale_y_continuous(breaks = seq(-10, 15, by = 1))+
+  xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, abs(signlogp.x)<1 & signlogp.y>(-log10(0.05))), aes(label=Row.names), size=6, color="black", fontface="bold",nudge_x = -4, nudge_y = 5, min.segment.length = unit(0, "lines"), max.overlaps = Inf)
+dev.off()
+```
+
+```{r}
+png(file="signlog_inhib_dmso4.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-20, 15, by = 1))+
+  scale_y_continuous(breaks = seq(-10, 15, by = 1))+
+  xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, abs(signlogp.x)<1 & signlogp.y<(-1)), aes(label=Row.names), size=6, color="black", fontface="bold",nudge_x = 4, nudge_y = -5, min.segment.length = unit(0, "lines"), max.overlaps = Inf)
+dev.off()
+```
+
+```{r}
+png(file="signlog_inhib_dmso_nfkb.png", width=1980, height=1440)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  scale_x_continuous(breaks = seq(-20, 15, by = 1))+
+  scale_y_continuous(breaks = seq(-10, 15, by = 1))+
+  xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, Row.names %in% c(Nfkb_genes, Zc3H12_genes)), aes(label=Row.names), size=6, color="black", fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = Inf)
+dev.off()
+```
+
+```{r}
+res_inhib_t6li<-data.frame(rn=rownames(res_inhib_t6li),res_inhib_t6li) %>% na.omit()
+#make a named vector of P adjusted
+inhib_t6li_gsea <- res_inhib_t6li$padj 
+names(inhib_t6li_gsea) <- res_inhib_t6li$rn
+
+ensgEntrez_inhib_t6li_gsea <- AnnotationDbi::select(org.Hs.eg.db, keys=names(inhib_t6li_gsea), columns='ENTREZID', keytype='SYMBOL')
+
+df_inhib_t6li_gsea <- ensgEntrez_inhib_t6li_gsea %>%
+  dplyr::inner_join(res_inhib_t6li, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj))
+
+inhib_t6li_lfc<-df_inhib_t6li_gsea$lfc 
+names(inhib_t6li_lfc)<-df_inhib_t6li_gsea$ENTREZID
+
+y_inhib_t6li <- gsePathway(sort((inhib_t6li_lfc), decreasing=T), organism = "human", pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F)
+
+inhib_t6li_gsea <- y_inhib_t6li@result
+inhib_t6li_gsea <- inhib_t6li_gsea %>% arrange(desc(NES))
+```
+
+```{r}
+res_dmso_t6li<-data.frame(rn=rownames(res_dmso_t6li),res_dmso_t6li) %>% na.omit()
+#make a named vector of P adjusted
+dmso_t6li_gsea <- res_dmso_t6li$padj 
+names(dmso_t6li_gsea) <- res_dmso_t6li$rn
+
+ensgEntrez_dmso_t6li_gsea <- AnnotationDbi::select(org.Hs.eg.db, 
+                                                   keys=names(dmso_t6li_gsea),
+                                                   columns='ENTREZID', keytype='SYMBOL')
+
+df_dmso_t6li_gsea <- ensgEntrez_dmso_t6li_gsea %>%
+  dplyr::inner_join(res_dmso_t6li, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj))
+
+dmso_t6li_lfc<-df_dmso_t6li_gsea$lfc 
+names(dmso_t6li_lfc)<-df_dmso_t6li_gsea$ENTREZID
+
+y_dmso_t6li <- gsePathway(sort((dmso_t6li_lfc), decreasing=T), organism = "human", pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F)
+
+dmso_t6li_gsea <- y_dmso_t6li@result
+dmso_t6li_gsea <- dmso_t6li_gsea %>% arrange(desc(NES))
+```
+
+```{r}
+common_gsea <- merge(inhib_t6li_gsea, dmso_t6li_gsea, by="ID", all=TRUE)
+
+for (i in 1:nrow(common_gsea)){
+  if(is.na(common_gsea$Description.x[i])){
+    common_gsea$Description.x[i] <- common_gsea$Description.y[i]
+    common_gsea$qvalues.x[i] <- 1}
+  if(is.na(common_gsea$Description.y[i])){
+    common_gsea$Description.y[i] <- common_gsea$Description.x[i]
+    common_gsea$qvalues.y[i] <- 1}}
+
+common_gsea <- common_gsea %>% mutate(Significance = ifelse(common_gsea$qvalues.x<=0.05 & common_gsea$qvalues.y<=0.05, "Both", ifelse(common_gsea$qvalues.x<=0.05 & common_gsea$qvalues.y>0.05, "Only Inhibitor", ifelse(common_gsea$qvalues.x>0.05 & common_gsea$qvalues.y<=0.05, "Only DMSO", "Neither"))))
+
+common_gsea$Significance <- as.factor(common_gsea$Significance)
+
+common_gsea_new <- common_gsea %>%
+  dplyr::filter(Significance != "Neither") %>%
+  dplyr::arrange(Significance) 
+
+common_gsea_new$qval_maximum = rowMaxs(as.matrix(common_gsea_new[,c(8,18)]))
+
+gsea_both <- common_gsea_new %>%
+  dplyr::filter(Significance == "Both") %>%
+  dplyr::arrange(qval_maximum)
+
+gsea_dmso <- common_gsea_new %>%
+  dplyr::filter(Significance == "Only DMSO") %>% 
+  dplyr::arrange(qvalues.y)
+
+gsea_inhib <- common_gsea_new %>%
+  dplyr::filter(Significance == "Only Inhibitor") %>% 
+  dplyr::arrange(qvalues.x)
+
+gsea_dmso_inhib <- bind_rows(gsea_dmso, gsea_inhib)
+common_gsea_new <- bind_rows(gsea_both, gsea_dmso_inhib)
+
+
+common_gsea_Excel <- common_gsea_new %>% 
+  dplyr::select(-qval_maximum, -Description.y, -pvalue.x, -pvalue.y, -p.adjust.x, -p.adjust.y) %>%
+  dplyr::rename("Description" = "Description.x", "p-adj Inhibitor" = "qvalues.x", "p-adj DMSO" = "qvalues.y", "CoreEnrichmentEntrez (Inhibitor vs Control)" = "core_enrichment.x", "CoreEnrichmentEntrez (DMSO vs Control)" = "core_enrichment.y","setSize(InhibitorvsControl)" =  "setSize.x", "setSize(DMSOvsControl)" =  "setSize.y", "enrichmentScore(InhibitorvsControl)" =  "enrichmentScore.x",  "enrichmentScore(DMSOvsControl)" =  "enrichmentScore.y", "NES(InhibitorvsControl)" =  "NES.x", "NES(DMSOvsControl)" =  "NES.y", "LeadingEdge(InhibitorvsControl" = "leading_edge.x", "LeadingEdge(DMSOvsControl" = "leading_edge.y", "rank(InhibitorvsControl)" = "rank.x", "rank(DMSOvsControl)" = "rank.y") 
+
+write.xlsx(common_gsea_Excel, "GSEA Common.xlsx")
+```
+
+```{r}
+a<-data.frame(gene = rownames(res_inhib_t6li), res_inhib_t6li,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), lfcsign = log2FoldChange/abs(log2FoldChange), signlogp = lfcsign*minuslogp) 
+b<-data.frame(gene = rownames(res_dmso_t6li), res_dmso_t6li,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj")%>% dplyr::mutate(minuslogp = -log10(padj), lfcsign = log2FoldChange/abs(log2FoldChange), signlogp = lfcsign*minuslogp) 
+
+c <- merge(a,b,by=0) 
+
+pdf("Reactome_inhib_dmso_cross.pdf", width=24, height=18)
+for(i in 1:nrow(common_gsea_Excel)){
+  ID <- common_gsea_Excel$ID[i]
+  Description <- common_gsea_Excel$Description[i]
+  genelist <- event2Ids(ID)[["geneSymbol"]]
+  
+  print(ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+          geom_point(size=2.25,color="grey", alpha=0.5)+
+          geom_point(data=subset(c, c$Row.names %in% genelist), color="red3", alpha=1, size=5)+
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.background = element_blank(),plot.background = element_blank(),
+                axis.line = element_line()) +
+          scale_x_continuous(breaks = seq(-20, 15, by = 1))+
+          scale_y_continuous(breaks = seq(-10, 15, by = 1))+
+          xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+          theme(axis.title = element_text(size = 40, face = "bold"),
+                axis.text=element_text(size=20, face = "bold"))+
+          ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+          theme(axis.title = element_text(size = 40, face = "bold"),
+                axis.text=element_text(size=20, face = "bold"))+
+          geom_vline(xintercept = log10(0.05), linetype="dashed")+
+          geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+          geom_hline(yintercept = log10(0.05), linetype="dashed")+
+          geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+          geom_label_repel(data=subset(c, Row.names %in% genelist & (c$minuslogp.x >(-log10(0.05)) | c$minuslogp.y > (-log10(0.05)))), aes(label=Row.names), size=6, color="black", fontface="bold", max.overlaps = Inf)+
+          annotate("text", x=-15, y=12, label=paste0(Description), size=12, hjust=0, color="red3")+
+          annotate("text", x=-15, y=11, label=paste0(ID), size=12, hjust=0, color="red3"))}
+dev.off()
+```
+
+
+```{r}
+library(plotly)
+p<- ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  ggtitle("Cross Comparison")+
+  xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")
+
+p<-ggplotly(p) %>% style(hoverinfo="Row.names")
+
+htmlwidgets::saveWidget(as_widget(p), "p.html")
+
+
+```
+
+```{r}
+p <- c %>% plot_ly(x=~signlogp.x, y=~signlogp.y) %>% add_trace(text = c$Row.names,
+hoverinfo="text")
+
+htmlwidgets::saveWidget(as_widget(p), "p.html")
+
+```
+
+```{r}
+p <- t6li_c11li_list %>% 
+  plot_ly(x=~log2FoldChange, y=~minuslogp) %>% 
+  add_trace(text = t6li_c11li_list$gene, hoverinfo="text") %>% 
+  add_segments(x=1, xend=1, y=0, yend=75) %>%
+  add_segments(x=-1, xend=-1, y=0, yend=75) %>%
+  add_segments(x=0, xend=5, y=1, yend=1) %>%
+  add_segments(x=0, xend=-5, y=1, yend=1)
+
+htmlwidgets::saveWidget(as_widget(p), "p.html")
+```
+
+```{r}
+signature_database <- read.csv("SignatureDB_030920.tsv", sep = "\t")
+```
+
+```{r}
+NFkB_Up_all_OCILy3_Ly10 <- signature_database %>%
+  filter(X____Signature == "NFkB_Up_all_OCILy3_Ly10")
+
+NFkB_Up_all_OCILy3_Ly10_genesymbols <- NFkB_Up_all_OCILy3_Ly10$X____Gene.symbol.concensus
+```
+
+```{r}
+NFkB_Up_bothOCILy3andLy10 <- signature_database %>%
+  filter(X____Signature == "NFkB_Up_bothOCILy3andLy10")
+
+NFkB_Up_bothOCILy3andLy10_genesymbols <- NFkB_Up_bothOCILy3andLy10$X____Gene.symbol.concensus
+```
+
+```{r}
+NFkB_Up_OCILy10_only <- signature_database %>%
+  filter(X____Signature == "NFkB_Up_OCILy10_only")
+
+NFkB_Up_OCILy10_only_genesymbols <- NFkB_Up_OCILy10_only$X____Gene.symbol.concensus
+```
+
+```{r}
+NFkB_Up_OCILy3_only <- signature_database %>%
+  filter(X____Signature == "NFkB_Up_OCILy3_only")
+
+NFkB_Up_OCILy3_only_genesymbols <- NFkB_Up_OCILy3_only$X____Gene.symbol.concensus
+```
+
+```{r}
+NFkB_Up_HBL1 <- signature_database %>%
+  filter(X____Signature == "NFkB_Up_HBL1")
+
+NFkB_Up_HBL1_genesymbols <- NFkB_Up_HBL1$X____Gene.symbol.concensus
+```
+
+```{r}
+NFkB_Up_BCR_paper <- signature_database %>%
+  filter(X____Signature == "NFkB_Up_BCR_paper")
+
+NFkB_Up_BCR_paper_genesymbols <- NFkB_Up_BCR_paper$X____Gene.symbol.concensus
+```
+
+```{r}
+union_signature_genesymbols <- unique(c(NFkB_Up_BCR_paper_genesymbols,
+                                      NFkB_Up_HBL1_genesymbols, 
+                                      NFkB_Up_all_OCILy3_Ly10_genesymbols))
+```
+
+
+```{r}
+res_t6li_t6wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","T6_C11_WT"), alpha = 0.05)
+
+t6li_t6wt_list_signatures<-data.frame(gene = rownames(res_t6li_t6wt), res_t6li_t6wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene") %>% filter(padj < 0.05) %>% dplyr::select("gene", "log2FoldChange")
+
+subset(t6li_t6wt_list_signatures$gene, t6li_t6wt_list_signatures$gene %in% NFkB_Up_all_OCILy3_Ly10_genesymbols)
+
+res_c11li_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","BJAB_C11_LI","BJAB_C11_WT"), alpha = 0.05)
+
+c11li_c11wt_list_signatures<-data.frame(gene = rownames(res_c11li_c11wt), res_c11li_c11wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene") %>% filter(padj < 0.05) %>% dplyr::select("gene", "log2FoldChange")
+
+subset(c11li_c11wt_list_signatures$gene, c11li_c11wt_list_signatures$gene %in% NFkB_Up_all_OCILy3_Ly10_genesymbols)
+```
+
+```{r}
+signature_genelist_1 <- subset(c11li_c11wt_list_signatures$gene, c11li_c11wt_list_signatures$gene %in% union_signature_genesymbols)
+
+signature_genelist_2 <- subset(t6li_t6wt_list_signatures$gene, t6li_t6wt_list_signatures$gene %in% union_signature_genesymbols)
+
+signature_genelist <- unique(c(signature_genelist_1, signature_genelist_2))
+
+merged_list_signatures <- merge(t6li_t6wt_list_signatures, c11li_c11wt_list_signatures, by="gene") %>% rename("log2FoldChange_t6" = "log2FoldChange.x", "log2FoldChange_bjab" = "log2FoldChange.y") %>% filter(gene %in% signature_genelist)
+
+melted_list_signatures <- melt(merged_list_signatures)
+```
+
+```{r}
+ggplot(merged_list_signatures) +
+  geom_qq(aes(sample=log2FoldChange_bjab))
+
+ggplot(merged_list_signatures) +
+  geom_qq(aes(sample=log2FoldChange_t6))
+```
+
+```{r}
+
+png("signatures_boxplot_Union.png", width=600, height=800)
+ggpaired(merged_list_signatures, cond1="log2FoldChange_bjab", 
+         cond2="log2FoldChange_t6", color = "condition", label = "gene", repel = TRUE, palette = "jco") +
+  stat_compare_means(label = "p.format", paired = TRUE, method = "wilcox.test")
+dev.off()
+
+```
+
+
+```{r}
+cell_marker_data <- vroom::vroom('http://bio-bigdata.hrbmu.edu.cn/CellMarker/download/Human_cell_markers.txt')
+
+cells <- cell_marker_data %>%
+    dplyr::select(cellName, geneID) %>%
+    dplyr::mutate(geneID = strsplit(geneID, ', ')) %>%
+    tidyr::unnest()
+```
+
+```{r}
+signatures <- signature_database %>%
+    dplyr::select(X____Short.signature.name, X____Gene.ID.concensus) %>%
+    tidyr::unnest()
+
+```
+
+```{r}
+sig_enrich_c11li_c11wt <- GSEA(sort((c11li_c11wt_lfc), decreasing=T), TERM2GENE = signatures)
+sig_enrich_c11li_c11wt <- setReadable(sig_enrich_c11li_c11wt, 'org.Hs.eg.db', 'ENTREZID')
+
+
+sig_enrich_t6li_t6wt <- GSEA(sort((t6li_t6wt_lfc), decreasing=T), TERM2GENE = signatures)
+sig_enrich_t6li_t6wt <- setReadable(sig_enrich_t6li_t6wt, 'org.Hs.eg.db', 'ENTREZID')
+
+```
+
+```{r}
+signatures_list <- c("NFkB-1", "NFkB-2", "NFkB-4", "NFkB-5", "NFkB-9", "NFkB-10")
+geneSetID_sig_c11li_c11wt = match(signatures_list,
+                              sig_enrich_c11li_c11wt@result[["ID"]])
+geneSetID_sig_t6li_t6wt = match(signatures_list,
+                              sig_enrich_t6li_t6wt@result[["ID"]])
+
+
+pdf("gseaplot2_sig_enrich_c11li_c11wt.pdf", width=12, height=9)
+gseaplot2(sig_enrich_c11li_c11wt, geneSetID = geneSetID_sig_c11li_c11wt[!is.na(geneSetID_sig_c11li_c11wt)], 
+          pvalue_table = FALSE, 
+          title="NFkB Signature Enrichment",
+          base_size = 16,
+          rel_heights = c(2,0.3,0.5))+
+  theme(axis.text = element_text(size=12, face = "bold"),
+        axis.title = element_text(size=16))
+dev.off()
+
+pdf("gseaplot2_sig_enrich_t6li_t6wt.pdf", width=12, height=9)
+gseaplot2(sig_enrich_t6li_t6wt, geneSetID = geneSetID_sig_t6li_t6wt[!is.na(geneSetID_sig_t6li_t6wt)], 
+          pvalue_table = FALSE, 
+          title="NFkB Signature Enrichment",
+          base_size = 16,
+          rel_heights = c(2,0.3,0.5))+
+  theme(axis.text = element_text(size=12, face = "bold"),
+        axis.title = element_text(size=16))
+dev.off()
+```
+
+
+```{r}
+sig_enrich_c11li_c11wt_df <- sig_enrich_c11li_c11wt@result
+sig_enrich_t6li_t6wt_df <- sig_enrich_t6li_t6wt@result
+
+sig_enrich_merged <- merge(sig_enrich_c11li_c11wt_df, sig_enrich_t6li_t6wt_df, by="ID")
+```
+
+```{r}
+png("sig_enrich_merged_scatter.png", width=1200, height=800)
+ggplot(sig_enrich_merged, aes(x=NES.x, y=NES.y))+
+  geom_point()+
+  geom_label_repel(aes(label=ID), size=3, color="black", fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = Inf)+
+  xlim(-4,4)+
+  ylim(-4,4)
+dev.off()
+```
+
+```{r}
+png("sig_enrich_nfkb_scatter.png", width=1200, height=800)
+ggplot(subset(sig_enrich_merged, sig_enrich_merged$ID %in% signatures_list) , aes(x=NES.x, y=NES.y))+
+  geom_point()+
+  geom_label_repel(aes(label=ID), size=3, color="black", fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)+
+  xlim(2,3)+
+  ylim(2,3)
+dev.off()
+```
