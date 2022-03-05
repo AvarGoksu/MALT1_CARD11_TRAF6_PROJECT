@@ -27,22 +27,8 @@ library(tidyverse)
 library(enrichplot)
 library(DOSE)
 library(pheatmap)
+library(clusterProfiler)
 ```
-
-To add:
-gseaplot2(y_inhib_dmso, geneSetID = 1:3, pvalue_table = TRUE,
-          color = c("#E495A5", "#86B875", "#7DB0DD"))
-
-enrichplot::upsetplot(y_inhib_dmso)
-
-enrichplot::heatplot(y_inhib_dmso, showCategory = 15)
-
-y_inhib_dmso <- setReadable(y_inhib_dmso, 'org.Hs.eg.db', 'ENTREZID')
-
-enrichplot::cnetplot(y_inhib_dmso_wnames)
-
-dotplot(y_inhib_dmso)
-
 
 
 ```{r}
@@ -1018,7 +1004,7 @@ t6li_c11li_sorted <- t6li_c11li_list %>%
 
 write.xlsx(t6li_c11li_sorted, "t6li_c11li_sorted.xlsx")
 
-png(file="Volcano_t6li_c11li.png", width=1980, height=1440)
+pdf(file="Volcano_t6li_c11li.pdf", width=24, height=21)
 ggplot(t6li_c11li_list, aes(x=log2FoldChange, y=(minuslogp)))+
   geom_point(size=2.25,color="grey", alpha=0.5)+
   geom_point(data=subset(t6li_c11li_list, minuslogp>(-log10(0.05))), size=2.25,color="darkorange1", alpha=1)+
@@ -1228,15 +1214,15 @@ for (i in genelist) {
 
 
 ```{r}
-res_t6li_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","BJAB_C11_WT"), alpha = 0.05)
+res_t6li_t6wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","T6_C11_WT"), alpha = 0.05)
 
-res_t6wt_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_WT","BJAB_C11_WT"), alpha = 0.05)
+res_c11li_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","BJAB_C11_LI","BJAB_C11_WT"), alpha = 0.05)
 ```
 
 ```{r}
-a<-data.frame(gene = rownames(res_t6li_c11wt), res_t6li_c11wt,
+a<-data.frame(gene = rownames(res_t6li_t6wt), res_t6li_t6wt,
 stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), lfcsign = log2FoldChange/abs(log2FoldChange), signlogp = lfcsign*minuslogp) 
-b<-data.frame(gene = rownames(res_t6wt_c11wt), res_t6wt_c11wt,
+b<-data.frame(gene = rownames(res_c11li_c11wt), res_c11li_c11wt,
 stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj")%>% dplyr::mutate(minuslogp = -log10(padj), lfcsign = log2FoldChange/abs(log2FoldChange), signlogp = lfcsign*minuslogp) 
 
 c <- merge(a,b,by=0) 
@@ -1255,19 +1241,19 @@ ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
         panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
   ggtitle("Cross Comparison")+
   theme(plot.title = element_text(size = 60, face = "bold"))+
-  scale_x_continuous(breaks = seq(-70, 70, by = 5))+
-  scale_y_continuous(breaks = seq(-50, 80, by = 10))+
-  xlab("T6KO C11MT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  scale_x_continuous(limits = c(-20,20),  breaks = seq(-20, 20, by = 5))+
+  scale_y_continuous(limits = c(-20,80),  breaks = seq(-20, 80, by = 5))+
+  xlab("TRAF6 Knockouts (C11 LI vs WT) (sign(LFC) x -log10(p-adj))")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
-  ylab("T6KO C11WT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  ylab("BJAB WTs (C11 LI vs WT) (sign(LFC) x -log10(p-adj))")+
   theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
   geom_vline(xintercept = log10(0.05), linetype="dashed")+
   geom_vline(xintercept = -log10(0.05), linetype="dashed")+
   geom_hline(yintercept = log10(0.05), linetype="dashed")+
   geom_hline(yintercept = -log10(0.05), linetype="dashed")+
-  geom_label_repel(data=subset(c, signlogp.x>5 & signlogp.y>5), aes(label=Row.names), size=6, color="black", fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = Inf)+
-  stat_cor(method = "spearman", size=12, label.y = 55, label.x = -50)+
-  annotate("text", x=-55, y=60, label="Spearman's Correlation of all genes:",
+  geom_label_repel(data=subset(c, abs(signlogp.x)>2 | abs(signlogp.y)>5), aes(label=Row.names), size=6, color="black", fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = 30)+
+  stat_cor(method = "spearman", size=12, label.y = 60, label.x = -15)+
+  annotate("text", x=-17, y=65, label="Spearman's Correlation of all genes:",
            vjust=0, hjust=0, size = 13)
 dev.off()
 
@@ -1449,14 +1435,14 @@ dev.off()
 res_c11li_c11wt_sig_sort_p <-data.frame(gene = rownames(res_c11li_c11wt), res_c11li_c11wt,
 stringsAsFactors = F) %>% 
   na.omit() %>%
-  filter(padj<0.05 & log2FoldChange > 1.0) %>%
+  filter(padj<0.05 & log2FoldChange > 0) %>%
   arrange(padj) %>%
   mutate(minuslogp = -log10(padj), minuslog2p = -log2(padj))
 
 res_t6li_t6wt_sig_sort_p <-data.frame(gene = rownames(res_t6li_t6wt), res_t6li_t6wt,
 stringsAsFactors = F) %>% 
   na.omit() %>%
-  filter(padj<0.05 & log2FoldChange > 1.0) %>%
+  filter(padj<0.05 & log2FoldChange > 0) %>%
   arrange(padj) %>%
   mutate(minuslogp = -log10(padj), minuslog2p = -log2(padj))
 
@@ -1522,21 +1508,21 @@ dev.off()
 ```
 
 ```{r}
-t6ko_list<-data.frame(gene = rownames(res_t6li_c11wt), res_t6li_c11wt,
-stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
-
-t6wt_list<-data.frame(gene = rownames(res_t6wt_c11wt), res_t6wt_c11wt,
-stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
-
-commonlist <- left_join(t6ko_list, t6wt_list, by="gene")
-
-commonlist <- commonlist %>% mutate(Significance = ifelse(commonlist$padj.x<=0.05 & commonlist$padj.y<=0.05, "Both", ifelse(commonlist$padj.x<=0.05 & commonlist$padj.y>0.05, "Only T6KO C11MT", ifelse(commonlist$padj.x>0.05 & commonlist$padj.y<=0.05, "Only T6WT C11 WT", "Neither"))))
-
-commonlist_excel <- commonlist %>%
-  dplyr::select(gene, log2FoldChange.x, padj.x, log2FoldChange.y, padj.y, Significance) %>%
-  dplyr::rename("Gene" = "gene", "LFC (T6KO C11MT vs Control)" = "log2FoldChange.x", "p-adj (T6KO C11MT vs Control)" = "padj.x", "LFC (T6KO C11WT vs Control)" = "log2FoldChange.y", "p-adj (T6KO C11WT vs Control)" = "padj.y")
-
-write.xlsx(commonlist_excel, "Cross Comparison List.xlsx")
+# t6ko_list<-data.frame(gene = rownames(res_t6li_c11wt), res_t6li_c11wt,
+# stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+# 
+# t6wt_list<-data.frame(gene = rownames(res_t6wt_c11wt), res_t6wt_c11wt,
+# stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene")
+# 
+# commonlist <- left_join(t6ko_list, t6wt_list, by="gene")
+# 
+# commonlist <- commonlist %>% mutate(Significance = ifelse(commonlist$padj.x<=0.05 & commonlist$padj.y<=0.05, "Both", ifelse(commonlist$padj.x<=0.05 & commonlist$padj.y>0.05, "Only T6KO C11MT", ifelse(commonlist$padj.x>0.05 & commonlist$padj.y<=0.05, "Only T6WT C11 WT", "Neither"))))
+# 
+# commonlist_excel <- commonlist %>%
+#   dplyr::select(gene, log2FoldChange.x, padj.x, log2FoldChange.y, padj.y, Significance) %>%
+#   dplyr::rename("Gene" = "gene", "LFC (T6KO C11MT vs Control)" = "log2FoldChange.x", "p-adj (T6KO C11MT vs Control)" = "padj.x", "LFC (T6KO C11WT vs Control)" = "log2FoldChange.y", "p-adj (T6KO C11WT vs Control)" = "padj.y")
+# 
+# write.xlsx(commonlist_excel, "Cross Comparison List.xlsx")
 ```
 
 ```{r}
@@ -1863,34 +1849,34 @@ stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj")%
 
 c <- merge(a,b,by=0) 
 
-pdf("Reactome_inhib_dmso_cross.pdf", width=24, height=18)
-for(i in 1:nrow(common_gsea_Excel)){
-  ID <- common_gsea_Excel$ID[i]
-  Description <- common_gsea_Excel$Description[i]
-  genelist <- event2Ids(ID)[["geneSymbol"]]
+#pdf("Reactome_inhib_dmso_cross.pdf", width=24, height=18)
+#for(i in 1:nrow(common_gsea_Excel)){
+ # ID <- common_gsea_Excel$ID[i]
+  #Description <- common_gsea_Excel$Description[i]
+  #genelist <- event2Ids(ID)[["geneSymbol"]]
   
-  print(ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
-          geom_point(size=2.25,color="grey", alpha=0.5)+
-          geom_point(data=subset(c, c$Row.names %in% genelist), color="red3", alpha=1, size=5)+
-          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-                panel.background = element_blank(),plot.background = element_blank(),
-                axis.line = element_line()) +
-          scale_x_continuous(breaks = seq(-20, 15, by = 1))+
-          scale_y_continuous(breaks = seq(-10, 15, by = 1))+
-          xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
-          theme(axis.title = element_text(size = 40, face = "bold"),
-                axis.text=element_text(size=20, face = "bold"))+
-          ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
-          theme(axis.title = element_text(size = 40, face = "bold"),
-                axis.text=element_text(size=20, face = "bold"))+
-          geom_vline(xintercept = log10(0.05), linetype="dashed")+
-          geom_vline(xintercept = -log10(0.05), linetype="dashed")+
-          geom_hline(yintercept = log10(0.05), linetype="dashed")+
-          geom_hline(yintercept = -log10(0.05), linetype="dashed")+
-          geom_label_repel(data=subset(c, Row.names %in% genelist & (c$minuslogp.x >(-log10(0.05)) | c$minuslogp.y > (-log10(0.05)))), aes(label=Row.names), size=6, color="black", fontface="bold", max.overlaps = Inf)+
-          annotate("text", x=-15, y=12, label=paste0(Description), size=12, hjust=0, color="red3")+
-          annotate("text", x=-15, y=11, label=paste0(ID), size=12, hjust=0, color="red3"))}
-dev.off()
+  #print(ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+   #       geom_point(size=2.25,color="grey", alpha=0.5)+
+    #      geom_point(data=subset(c, c$Row.names %in% genelist), color="red3", alpha=1, size=5)+
+     #     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+      #          panel.background = element_blank(),plot.background = element_blank(),
+       #         axis.line = element_line()) +
+        #  scale_x_continuous(breaks = seq(-20, 15, by = 1))+
+         # scale_y_continuous(breaks = seq(-10, 15, by = 1))+
+          #xlab("Inhibitor Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+          #theme(axis.title = element_text(size = 40, face = "bold"),
+           #     axis.text=element_text(size=20, face = "bold"))+
+          #ylab("DMSO Treated vs T6KO C11MT (sign(LFC) x -log10(p-adj))")+
+          #theme(axis.title = element_text(size = 40, face = "bold"),
+           #     axis.text=element_text(size=20, face = "bold"))+
+          #geom_vline(xintercept = log10(0.05), linetype="dashed")+
+          #geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+          #geom_hline(yintercept = log10(0.05), linetype="dashed")+
+          #geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+          #geom_label_repel(data=subset(c, Row.names %in% genelist & (c$minuslogp.x >(-log10(0.05)) | c$minuslogp.y > (-log10(0.05)))), aes(label=Row.names), size=6, color="black", fontface="bold", max.overlaps = Inf)+
+          #annotate("text", x=-15, y=12, label=paste0(Description), size=12, hjust=0, color="red3")+
+          #annotate("text", x=-15, y=11, label=paste0(ID), size=12, hjust=0, color="red3"))}
+#dev.off()
 ```
 
 
@@ -1982,7 +1968,7 @@ NFkB_Up_BCR_paper_genesymbols <- NFkB_Up_BCR_paper$X____Gene.symbol.concensus
 ```{r}
 union_signature_genesymbols <- unique(c(NFkB_Up_BCR_paper_genesymbols,
                                       NFkB_Up_HBL1_genesymbols, 
-                                      NFkB_Up_all_OCILy3_Ly10_genesymbols))
+                                      NFkB_Up_bothOCILy3andLy10))
 ```
 
 
@@ -1992,14 +1978,14 @@ res_t6li_t6wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","T6_
 t6li_t6wt_list_signatures<-data.frame(gene = rownames(res_t6li_t6wt), res_t6li_t6wt,
 stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene") %>% filter(padj < 0.05) %>% dplyr::select("gene", "log2FoldChange")
 
-subset(t6li_t6wt_list_signatures$gene, t6li_t6wt_list_signatures$gene %in% NFkB_Up_all_OCILy3_Ly10_genesymbols)
+subset(t6li_t6wt_list_signatures$gene, t6li_t6wt_list_signatures$gene %in% union_signature_genesymbols)
 
 res_c11li_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","BJAB_C11_LI","BJAB_C11_WT"), alpha = 0.05)
 
 c11li_c11wt_list_signatures<-data.frame(gene = rownames(res_c11li_c11wt), res_c11li_c11wt,
 stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene") %>% filter(padj < 0.05) %>% dplyr::select("gene", "log2FoldChange")
 
-subset(c11li_c11wt_list_signatures$gene, c11li_c11wt_list_signatures$gene %in% NFkB_Up_all_OCILy3_Ly10_genesymbols)
+subset(c11li_c11wt_list_signatures$gene, c11li_c11wt_list_signatures$gene %in% union_signature_genesymbols)
 ```
 
 ```{r}
@@ -2024,10 +2010,11 @@ ggplot(merged_list_signatures) +
 
 ```{r}
 
-png("signatures_boxplot_Union.png", width=600, height=800)
+pdf("signatures_boxplot_Union.pdf", width=6, height=8)
 ggpaired(merged_list_signatures, cond1="log2FoldChange_bjab", 
          cond2="log2FoldChange_t6", color = "condition", label = "gene", repel = TRUE, palette = "jco") +
-  stat_compare_means(label = "p.format", paired = TRUE, method = "wilcox.test")
+  stat_compare_means(label = "p.format", paired = TRUE, method = "wilcox.test",
+                     label.x.npc = "right")
 dev.off()
 
 ```
@@ -2060,7 +2047,7 @@ sig_enrich_t6li_t6wt <- setReadable(sig_enrich_t6li_t6wt, 'org.Hs.eg.db', 'ENTRE
 ```
 
 ```{r}
-signatures_list <- c("NFkB-1", "NFkB-2", "NFkB-4", "NFkB-5", "NFkB-9", "NFkB-10")
+signatures_list <- c("NFkB-2", "NFkB-9", "NFkB-10")
 geneSetID_sig_c11li_c11wt = match(signatures_list,
                               sig_enrich_c11li_c11wt@result[["ID"]])
 geneSetID_sig_t6li_t6wt = match(signatures_list,
@@ -2097,21 +2084,245 @@ sig_enrich_merged <- merge(sig_enrich_c11li_c11wt_df, sig_enrich_t6li_t6wt_df, b
 ```
 
 ```{r}
-png("sig_enrich_merged_scatter.png", width=1200, height=800)
+pdf("sig_enrich_merged_scatter.pdf", width=12, height=8)
 ggplot(sig_enrich_merged, aes(x=NES.x, y=NES.y))+
   geom_point()+
-  geom_label_repel(aes(label=ID), size=3, color="black", fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = Inf)+
+  geom_label_repel(aes(label=ID), size=2, color="black", fontface="bold",  min.segment.length = unit(1, "lines"), max.overlaps = Inf)+
   xlim(-4,4)+
-  ylim(-4,4)
+  ylim(-4,4)+
+  xlab("NES of the Signature in C11MTvsWT (TRAF6 WTs)")+
+  ylab("NES of the Signature in C11MTvsWT (TRAF6 KOs)")
 dev.off()
 ```
 
 ```{r}
-png("sig_enrich_nfkb_scatter.png", width=1200, height=800)
+pdf("sig_enrich_nfkb_scatter.pdf", width=12, height=8)
 ggplot(subset(sig_enrich_merged, sig_enrich_merged$ID %in% signatures_list) , aes(x=NES.x, y=NES.y))+
   geom_point()+
-  geom_label_repel(aes(label=ID), size=3, color="black", fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = 20)+
-  xlim(2,3)+
-  ylim(2,3)
+  geom_label_repel(aes(label=ID), size=3, color="black", fontface="bold",  min.segment.length = unit(0, "lines"), max.overlaps = Inf)+
+  scale_x_continuous(limits = c(2,3), breaks=seq(2,3,0.1))+
+  scale_y_continuous(limits = c(2,3), breaks=seq(2,3,0.1))+  
+  xlab("NES of the Signature in C11MTvsWT (TRAF6 WTs)")+
+  ylab("NES of the Signature in C11MTvsWT (TRAF6 KOs)")+
+  geom_vline(xintercept = 2.5, linetype="dashed")+
+  geom_hline(yintercept = 2.5, linetype="dashed")+
+  geom_abline()
 dev.off()
 ```
+```{r}
+res_t6li_c11li <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","BJAB_C11_LI"), alpha = 0.05)
+
+t6li_c11li_list_signatures<-data.frame(gene = rownames(res_t6li_c11li), res_t6li_c11li,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), "LFCminuslogp" = log2FoldChange*minuslogp) %>% rownames_to_column(var = "gene") %>% filter(padj < 0.05) %>% dplyr::select("gene", "log2FoldChange")
+
+signatures_heatmap_list <- subset(t6li_c11li_list_signatures$gene, t6li_c11li_list_signatures$gene %in% union_signature_genesymbols)
+
+signatures_heatmap_df <- subset(t6li_c11li_list_signatures, t6li_c11li_list_signatures$gene %in% union_signature_genesymbols)
+
+signatures_heatmap_df_lfcsig <- signatures_heatmap_df %>%
+  dplyr::filter(abs(log2FoldChange) > 1.0)
+
+```
+
+```{r}
+df <- as.data.frame(as.data.frame(coldata)$Sample_Group) 
+rownames(df) <- row.names(coldata)
+colnames(df) <- c("SampleGroup")
+df <- df %>% dplyr::arrange(SampleGroup)
+
+df_t6_ko <- df %>% dplyr::filter(SampleGroup %in% c("BJAB_C11_LI", 
+                                                    "T6_C11_LI"))
+
+
+vsdMat_t6_ko <- vsdMat[,row.names(df_t6_ko)]
+
+
+pdf("Heatmap_signatures.pdf", height = 16, width=10)
+pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% signatures_heatmap_list), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 20, fontsize_col = 20, fontsize_row = 20)
+dev.off()
+
+
+pdf("Heatmap_signatures_lfcsig.pdf", height = 8, width=10)
+pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% signatures_heatmap_df_lfcsig$gene), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 20, fontsize_col = 20, fontsize_row = 20)
+dev.off()
+```
+
+```{r}
+res_t6li_c11li <- DESeq2::results(dds, contrast=c("Sample_Group","BJAB_C11_LI","T6_C11_LI"), alpha = 0.05)
+
+res_t6li_c11li<-data.frame(rn=rownames(res_t6li_c11li),res_t6li_c11li) %>% na.omit()
+#make a named vector of P adjusted
+t6li_c11li_gsea <- res_t6li_c11li$padj 
+names(t6li_c11li_gsea) <- res_t6li_c11li$rn
+
+
+ensgEntrez_t6li_c11li_gsea <- AnnotationDbi::select(org.Hs.eg.db, keys=names(t6li_c11li_gsea), columns='ENTREZID', keytype='SYMBOL')
+
+df_t6li_c11li_gsea <- ensgEntrez_t6li_c11li_gsea %>%
+  dplyr::inner_join(res_t6li_c11li, by=c("SYMBOL"="rn")) %>% 
+  dplyr::select(ENTREZID,log2FoldChange,padj) %>% 
+  dplyr::group_by(ENTREZID) %>%
+  dplyr::summarise(lfc=mean(log2FoldChange), up=min(padj)) 
+
+
+t6li_c11li_lfc<-df_t6li_c11li_gsea$lfc 
+names(t6li_c11li_lfc)<-df_t6li_c11li_gsea$ENTREZID
+
+
+sig_enrich_t6li_c11li <- GSEA(sort((t6li_c11li_lfc), decreasing=T), TERM2GENE = signatures)
+sig_enrich_t6li_c11li <- setReadable(sig_enrich_t6li_c11li, 'org.Hs.eg.db', 'ENTREZID')
+
+y_t6li_c11li <- gsePathway(sort((t6li_c11li_lfc), decreasing=T), organism = "human", pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F, eps=0)
+
+y_t6li_c11li <- setReadable(y_t6li_c11li, 'org.Hs.eg.db', 'ENTREZID')
+
+t6li_c11li_gsea <- y_t6li_c11li@result
+t6li_c11li_gsea <- t6li_c11li_gsea %>% arrange(desc(NES))
+
+pathway_list_t6li_c11li <- c("Interleukin-10 signaling",
+                  "Interleukin-3, Interleukin-5 and GM-CSF signaling")
+
+geneSetID_t6li_c11li = match(pathway_list_t6li_c11li,
+                              y_t6li_c11li@result[["Description"]])
+
+pdf("gseaplot2_t6li_c11li.pdf", width=12, height=9)
+gseaplot2(y_t6li_c11li, geneSetID = geneSetID_t6li_c11li[!is.na(geneSetID_t6li_c11li)], 
+          pvalue_table = FALSE, 
+          title="T6KO C11MT vs T6WT C11MT Selected Pathways",
+          base_size = 16,
+          rel_heights = c(2,0.3,0.5))+
+  theme(axis.text = element_text(size=12, face = "bold"),
+        axis.title = element_text(size=16))
+dev.off()
+```
+
+```{r}
+geneSetID_sig_t6li_c11li = match(signatures_list,
+                              sig_enrich_t6li_c11li@result[["ID"]])
+
+
+pdf("gseaplot2_sig_enrich_t6li_c11li.pdf", width=12, height=9)
+gseaplot2(sig_enrich_t6li_c11li, geneSetID = geneSetID_sig_t6li_c11li[!is.na(geneSetID_sig_t6li_c11li)], 
+          pvalue_table = FALSE, 
+          title="NFkB Signature Enrichment",
+          base_size = 16,
+          rel_heights = c(2,0.3,0.5))+
+  theme(axis.text = element_text(size=12, face = "bold"),
+        axis.title = element_text(size=16))
+dev.off()
+```
+
+
+```{r}
+res_t6li_t6wt <- DESeq2::results(dds, contrast=c("Sample_Group","T6_C11_LI","T6_C11_WT"), alpha = 0.05)
+
+res_c11li_c11wt <- DESeq2::results(dds, contrast=c("Sample_Group","BJAB_C11_LI","BJAB_C11_WT"), alpha = 0.05)
+```
+
+```{r}
+a<-data.frame(gene = rownames(res_t6li_t6wt), res_t6li_t6wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj") %>% dplyr::mutate(minuslogp = -log10(padj), lfcsign = log2FoldChange/abs(log2FoldChange), signlogp = lfcsign*minuslogp) 
+b<-data.frame(gene = rownames(res_c11li_c11wt), res_c11li_c11wt,
+stringsAsFactors = F) %>% na.omit() %>% dplyr::select("log2FoldChange", "padj")%>% dplyr::mutate(minuslogp = -log10(padj), lfcsign = log2FoldChange/abs(log2FoldChange), signlogp = lfcsign*minuslogp) 
+
+c <- merge(a,b,by=0) 
+d <- c %>% 
+  dplyr::filter(padj.x<0.05, padj.y<0.05)
+e <- c %>%
+  dplyr::filter(padj.x < 0.05 | padj.y < 0.05)
+f <- c %>% dplyr::filter(padj.x < 0.05 & padj.y < 0.05 & log2FoldChange.x > 0 & log2FoldChange.y > 0 )
+
+sig_list_combined <- f$Row.names
+
+pdf(file="signlog_commonUp.pdf", width=10, height=14)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.6)+
+  geom_point(data=f, size=15,color="red3", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("Cross Comparison")+
+  theme(plot.title = element_text(size = 30, face = "bold"))+
+  scale_x_continuous(limits = c(-7.5,20),  breaks = seq(-7.5, 20, by = 2.5))+
+  scale_y_continuous(limits = c(-20,80),  breaks = seq(-20, 80, by = 5))+
+  xlab("TRAF6 Knockouts (C11 LI vs WT) (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 20, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("BJAB WTs (C11 LI vs WT) (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 20, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=f, aes(label=Row.names), size=6, color="black", fontface="bold", max.overlaps = Inf, force = 10, min.segment.length = 0)
+dev.off()
+
+png(file="LFCcomparison.png", width=1980, height=1440)
+ggplot(c, aes(x=log2FoldChange.x, y=log2FoldChange.y))+
+  geom_point(size=2.5,color="grey", alpha=0.8)+
+  geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  geom_point(data=d, size=2.5,color="purple", alpha=0.6)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) + 
+  xlim(-4,7.5)+
+  ylim(-4,7.5)+
+  ggtitle("LFC Comparison at p-adj<0.05 (Cross Comparison)")+
+  theme(plot.title = element_text(size = 60, face = "bold"))+
+  xlab("T6KO C11MT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=25, face = "bold"))+
+  ylab("T6KO C11WT vs T6WT C11WT (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 40, face = "bold"), axis.text=element_text(size=25, face = "bold"))+
+  geom_label_repel(data=subset(d, log2FoldChange.x<(-1) & log2FoldChange.y<(-1)), aes(label=Row.names), size=7.5, color="black", nudge_y = 0.05, fontface = "bold", min.segment.length = unit(0.3, "lines"))+
+  geom_label_repel(data=subset(d, log2FoldChange.x>(0.5) & log2FoldChange.y<(0)), aes(label=Row.names), size=7.5, color="black", nudge_y = 0.05, fontface = "bold", min.segment.length = unit(0.3, "lines"))+
+  geom_label_repel(data=subset(e, log2FoldChange.x>2 | log2FoldChange.y<(-2.5)), aes(label=Row.names), size=7.5, color="black", nudge_y = 0.05, fontface = "bold", min.segment.length = unit(0.3, "lines"))+
+  stat_cor(data=d,method = "spearman", size=12, label.y = 5.5, label.x = -2.85, fontface="italic")+
+  annotate("text", x=-1.85, y=6.5, label="Spearman's Correlation of only\ncommonly significant genes", size = 13, fontface="italic")+
+  geom_hline(yintercept = 0, linetype="dashed")+
+  geom_vline(xintercept=0, linetype="dashed")
+dev.off()  
+```
+
+```{r}
+pdf(file="signlog_signatures.pdf", width=10, height=14)
+ggplot(c, aes(x=signlogp.x, y=signlogp.y))+
+  geom_point(size=2.25,color="grey", alpha=0.5)+
+  #geom_point(data=subset(c, padj.x>0.05 & padj.y<0.05), size=2.25,color="red", alpha=0.6)+
+  #geom_point(data=subset(c, padj.x<0.05 & padj.y>0.05), size=2.25,color="blue", alpha=0.6)+
+  #geom_point(data=d, size=2.25,color="purple", alpha=0.6)+
+  geom_point(data=subset(c, Row.names %in% union_signature_genesymbols), size=2.25, color="red", alpha=1)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),plot.background = element_blank(), axis.line = element_line()) +
+  ggtitle("NFkB Signatures (NFkB-2-9-10")+
+  theme(plot.title = element_text(size = 20, face = "bold"))+
+  scale_x_continuous(limits = c(-20,20),  breaks = seq(-20, 20, by = 5))+
+  scale_y_continuous(limits = c(-20,80),  breaks = seq(-20, 80, by = 5))+
+  xlab("TRAF6 Knockouts (C11 LI vs WT) (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 20, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  ylab("BJAB WTs (C11 LI vs WT) (sign(LFC) x -log10(p-adj))")+
+  theme(axis.title = element_text(size = 20, face = "bold"), axis.text=element_text(size=20, face = "bold"))+
+  geom_vline(xintercept = log10(0.05), linetype="dashed")+
+  geom_vline(xintercept = -log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = log10(0.05), linetype="dashed")+
+  geom_hline(yintercept = -log10(0.05), linetype="dashed")+
+  geom_label_repel(data=subset(c, Row.names %in% union_signature_genesymbols & (padj.x<0.05 | padj.y<0.05)), aes(label=Row.names), size=6, color="black", fontface="bold", min.segment.length = unit(0, "lines"), max.overlaps = Inf)
+  #stat_cor(method = "spearman", size=12, label.y = 60, label.x = -15)+
+  #annotate("text", x=-17, y=65, label="Spearman's Correlation of all genes:",
+          # vjust=0, hjust=0, size = 13)
+dev.off()
+```
+```{r}
+df <- as.data.frame(as.data.frame(coldata)$Sample_Group) 
+rownames(df) <- row.names(coldata)
+colnames(df) <- c("SampleGroup")
+df <- df %>% dplyr::arrange(SampleGroup)
+
+df_t6_ko <- df %>% dplyr::filter(SampleGroup %in% c("BJAB_C11_LI","BJAB_C11_WT", 
+                                                    "T6_C11_LI", "T6_C11_WT"))
+
+
+vsdMat_t6_ko <- vsdMat[,row.names(df_t6_ko)]
+
+pdf("Heatmap_common_sig.pdf", height = 8, width=12)
+pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_list_combined), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=TRUE, annotation_col=df_t6_ko, scale = "row", fontsize = 20, fontsize_col = 20, fontsize_row = 20, clustering_distance_rows = "euclidean", clustering_distance_cols = "euclidean")
+dev.off()
+```
+
