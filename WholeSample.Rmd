@@ -28,6 +28,7 @@ library(enrichplot)
 library(DOSE)
 library(pheatmap)
 library(clusterProfiler)
+#library(ComplexHeatmap)
 ```
 
 
@@ -1466,17 +1467,17 @@ vsdMat_t6_ko <- vsdMat[,row.names(df_t6_ko)]
 
 
 pdf("Heatmap_siglist.pdf", width=21, height = 28)
-pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_list_combined), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 25, fontsize_col = 25, fontsize_row = 20, angle_col = 90, main="Genes with |LFC|>1 & padj<0.05 in at least one of these comparisons:\n1) C11MT vs C11WT. 2) T6KO C11MT vs T6KO C11WT", legend_breaks = )
+pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_list_combined), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 25, fontsize_col = 25, fontsize_row = 20, main="Genes with |LFC|>1 & padj<0.05 in at least one of these comparisons:\n1) C11MT vs C11WT. 2) T6KO C11MT vs T6KO C11WT", legend_breaks = )
 dev.off()
 ```
 ```{r}
 pdf("Heatmap_siglist_c11li_c11wt.pdf", width=18, height = 24)
-pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_genelist_c11li_c11wt), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 25, fontsize_col = 25, fontsize_row = 20, angle_col = 90, main="Genes with |LFC|>1 & padj<0.05 in C11MT vs C11WT")
+pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_genelist_c11li_c11wt), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 25, fontsize_col = 25, fontsize_row = 20, main="Genes with |LFC|>1 & padj<0.05 in C11MT vs C11WT")
 dev.off()
 ```
 ```{r}
 pdf("Heatmap_siglist_t6li_t6wt.pdf", width=21, height = 18)
-pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_genelist_t6li_t6wt), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 25, fontsize_col = 25, fontsize_row = 20, angle_col = 90, main="Genes with |LFC|>1 & padj<0.05 in T6KO C11MT vs T6KO C11WT")
+pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_genelist_t6li_t6wt), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=FALSE, annotation_col=df_t6_ko, scale = "row", fontsize = 25, fontsize_col = 25, fontsize_row = 20, main="Genes with |LFC|>1 & padj<0.05 in T6KO C11MT vs T6KO C11WT")
 dev.off()
 ```
 
@@ -1495,7 +1496,7 @@ df_inhib_dmso <- df %>%
 vsdMat_inhib_dmso <- vsdMat[,row.names(df_inhib_dmso)]
 
 pdf("Heatmap_inhib_dmso.pdf", width=7, height=4)
-pheatmap(subset(vsdMat_inhib_dmso, rownames(vsdMat_inhib_dmso) %in% heatmap_list_inhib_dmso), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=TRUE, annotation_col=df_inhib_dmso, scale = "row", fontsize = 10, fontsize_col = 10, fontsize_row = 10, angle_col = 90, main="Inhib vs DMSO Selected Genes")
+pheatmap(subset(vsdMat_inhib_dmso, rownames(vsdMat_inhib_dmso) %in% heatmap_list_inhib_dmso), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=TRUE, annotation_col=df_inhib_dmso, scale = "row", fontsize = 10, fontsize_col = 10, fontsize_row = 10, main="Inhib vs DMSO Selected Genes")
 dev.off()
 ```
 
@@ -1503,7 +1504,7 @@ dev.off()
 sig_genelist_inhib_dmso<- (inhib_dmso_sorted$gene)[1:10]
 
 pdf("Heatmap_siglist_inhib_dmso.pdf", width=7.5, height=5)
-pheatmap(subset(vsdMat_inhib_dmso, rownames(vsdMat_inhib_dmso) %in% sig_genelist_inhib_dmso), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=TRUE, annotation_col=df_inhib_dmso, scale = "row", fontsize = 10, fontsize_col = 10, fontsize_row = 10, angle_col = 90, main="Inhib vs DMSO Selected Genes")
+pheatmap(subset(vsdMat_inhib_dmso, rownames(vsdMat_inhib_dmso) %in% sig_genelist_inhib_dmso), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=TRUE, annotation_col=df_inhib_dmso, scale = "row", fontsize = 10, fontsize_col = 10, fontsize_row = 10, main="Inhib vs DMSO Selected Genes")
 dev.off()
 ```
 
@@ -2315,14 +2316,92 @@ rownames(df) <- row.names(coldata)
 colnames(df) <- c("SampleGroup")
 df <- df %>% dplyr::arrange(SampleGroup)
 
-df_t6_ko <- df %>% dplyr::filter(SampleGroup %in% c("BJAB_C11_LI","BJAB_C11_WT", 
-                                                    "T6_C11_LI", "T6_C11_WT"))
+df_t6_ko <- df %>% dplyr::filter(SampleGroup %in% c("BJAB_C11_WT", "BJAB_C11_LI", 
+                                                    "T6_C11_WT","T6_C11_LI"))
 
 
 vsdMat_t6_ko <- vsdMat[,row.names(df_t6_ko)]
 
+
+heatmap_order <- c("S60", "S48", "S52", "S56", "S64", "S53", "S57", "S61", "S49", "S65",
+                   "S50", "S54", "S62", "S58", "S66", "S59", "S55", "S63", "S51", "S67")
+
+vsdMat_t6_ko <- vsdMat_t6_ko[, heatmap_order]
+df_t6_ko <- df_t6_ko[order(match(rownames(df_t6_ko),heatmap_order)),,drop=F]
+
 pdf("Heatmap_common_sig.pdf", height = 8, width=12)
-pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_list_combined), cluster_rows=TRUE, show_rownames=TRUE,cluster_cols=TRUE, annotation_col=df_t6_ko, scale = "row", fontsize = 20, fontsize_col = 20, fontsize_row = 20, clustering_distance_rows = "euclidean", clustering_distance_cols = "euclidean")
+pheatmap(subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% sig_list_combined), cluster_rows=TRUE, show_rownames=TRUE, annotation_col=df_t6_ko, scale = "row", fontsize = 20, fontsize_col = 20, fontsize_row = 20, clustering_distance_rows = "euclidean", cluster_cols = FALSE, cutree_rows = 2, angle_col = 90)
 dev.off()
 ```
+```{r}
+res_c11li_c11wt_sig_sort <-data.frame(gene = rownames(res_c11li_c11wt), res_c11li_c11wt,
+stringsAsFactors = F) %>% 
+  na.omit() %>%
+  filter(padj<0.01 & log2FoldChange > 1.3) %>%
+  arrange(desc(log2FoldChange)) %>%
+  mutate(minuslogp = -log10(padj), minuslog2p = -log2(padj))
+```
+
+```{r}
+res_t6li_t6wt_sig_sort <-data.frame(gene = rownames(res_t6li_t6wt), res_t6li_t6wt,
+stringsAsFactors = F) %>% 
+  na.omit() %>%
+  filter(padj<0.01 & log2FoldChange > 1.3) %>%
+  arrange(desc(log2FoldChange)) %>%
+  mutate(minuslogp = -log10(padj), minuslog2p = -log2(padj))
+```
+
+
+```{r}
+data_t6_heatmap <- subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% res_t6li_t6wt_sig_sort$gene)
+
+data_c11_heatmap <- subset(vsdMat_t6_ko, rownames(vsdMat_t6_ko) %in% res_c11li_c11wt_sig_sort$gene)
+
+data_t6_heatmap <- data_t6_heatmap[res_t6li_t6wt_sig_sort$gene,]
+data_c11_heatmap <- data_c11_heatmap[res_c11li_c11wt_sig_sort$gene,]
+
+
+pdf("Heatmap_t6_unclustered.pdf", height = 7, width=12)
+pheatmap(data_t6_heatmap, cluster_rows=FALSE, show_rownames=TRUE, annotation_col=df_t6_ko, scale = "row", fontsize = 20, fontsize_col = 20, fontsize_row = 20, cluster_cols = FALSE, angle_col = 90)
+dev.off()
+
+pdf("Heatmap_c11_unclustered.pdf", height = 10, width=12)
+pheatmap(data_c11_heatmap, cluster_rows=FALSE, show_rownames=TRUE, annotation_col=df_t6_ko, scale = "row", fontsize = 20, fontsize_col = 20, fontsize_row = 20, cluster_cols = FALSE, angle_col = 90)
+dev.off()
+
+
+pheatmap(data_t6_heatmap, cluster_rows=TRUE, show_rownames=TRUE, annotation_col=df_t6_ko, scale = "row", fontsize = 20, fontsize_col = 20, fontsize_row = 20, cluster_cols = FALSE, angle_col = 90)
+
+
+pheatmap(data_c11_heatmap, cluster_rows=TRUE, show_rownames=TRUE, annotation_col=df_t6_ko, scale = "row", fontsize = 20, fontsize_col = 20, fontsize_row = 20, cluster_cols = FALSE, angle_col = 90)
+```
+
+```{r}
+# only_c11 <- subset(res_c11li_c11wt_sig_sort_p, res_c11li_c11wt_sig_sort_p$gene %in% sig_list_combined == FALSE) %>% dplyr::filter(log2FoldChange > 1)
+# 
+# 
+# scaled <- t(scale(t(vsdMat_t6_ko)))
+# 
+# column_ha <- HeatmapAnnotation(df = df_t6_ko)
+# 
+# pdf("complexheatmap_additionalc11_merged.pdf", height = 15, width = 10)
+# ComplexHeatmap::Heatmap(subset(scaled, rownames(scaled) %in% c(sig_list_combined, only_c11$gene)), top_annotation = column_ha)
+# dev.off()
+# 
+# ht1 <- ComplexHeatmap::Heatmap(subset(scaled, rownames(scaled) %in% sig_list_combined), top_annotation = column_ha, row_split = 2)
+# 
+# ht2 <- ComplexHeatmap::Heatmap(subset(scaled, rownames(scaled) %in% only_c11$gene), row_split = 2)
+# 
+# ht_list = ht1 %v% ht2
+# 
+# pdf("complexheatmap_additionalc11.pdf", height = 15, width = 10)
+# draw(ht_list)
+# dev.off()
+
+```
+
+```{r}
+
+```
+
 
