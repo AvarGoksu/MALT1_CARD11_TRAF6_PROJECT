@@ -28,7 +28,19 @@ library(enrichplot)
 library(DOSE)
 library(pheatmap)
 library(clusterProfiler)
+library(msigdbr)
 #library(ComplexHeatmap)
+```
+
+```{r}
+H_t2g <- msigdbr(species = "Homo sapiens", category = "H") %>% dplyr::select(gs_name, entrez_gene)
+C1_t2g <- msigdbr(species = "Homo sapiens", category = "C1") %>% dplyr::select(gs_name, entrez_gene)
+C3_t2g <- msigdbr(species = "Homo sapiens", category = "C3") %>% dplyr::select(gs_name, entrez_gene)
+C6_t2g <- msigdbr(species = "Homo sapiens", category = "C6") %>% dplyr::select(gs_name, entrez_gene)
+
+
+
+msigdb <- bind_rows(H_t2g, C1_t2g, C3_t2g, C6_t2g)
 ```
 
 
@@ -364,6 +376,8 @@ y_inhib_dmso <- gsePathway(sort((inhib_dmso_lfc), decreasing=T), organism = "hum
 
 y_inhib_dmso <- setReadable(y_inhib_dmso, 'org.Hs.eg.db', 'ENTREZID')
 
+y_inhib_dmso_msigdb <- GSEA(sort((inhib_dmso_lfc), decreasing=T), pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F, TERM2GENE = msigdb)
+
 inhib_dmso_gsea <- y_inhib_dmso@result
 inhib_dmso_gsea <- inhib_dmso_gsea %>% arrange(desc(NES))
 
@@ -580,6 +594,8 @@ c11li_c11wt_lfc<-df_c11li_c11wt_gsea$lfc
 names(c11li_c11wt_lfc)<-df_c11li_c11wt_gsea$ENTREZID
 
 y_c11li_c11wt <- gsePathway(sort((c11li_c11wt_lfc), decreasing=T), organism = "human", pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F, eps=0)
+
+y_c11li_c11wt_msigdb <- GSEA(sort((c11li_c11wt_lfc), decreasing=T), pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F, TERM2GENE = msigdb)
 
 y_c11li_c11wt <- setReadable(y_c11li_c11wt, 'org.Hs.eg.db', 'ENTREZID')
 
@@ -831,6 +847,8 @@ t6li_t6wt_lfc<-df_t6li_t6wt_gsea$lfc
 names(t6li_t6wt_lfc)<-df_t6li_t6wt_gsea$ENTREZID
 
 y_t6li_t6wt <- gsePathway(sort((t6li_t6wt_lfc), decreasing=T), organism = "human", pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F, eps=0)
+
+y_t6li_t6wt_msigdb <- GSEA(sort((t6li_t6wt_lfc), decreasing=T), pvalueCutoff=0.05, pAdjustMethod="BH", verbose=F, TERM2GENE = msigdb)
 
 y_t6li_t6wt <- setReadable(y_t6li_t6wt, 'org.Hs.eg.db', 'ENTREZID')
 
